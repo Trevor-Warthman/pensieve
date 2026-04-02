@@ -31,3 +31,6 @@ infra/lambda-src/*.zip
 
 # macOS
 .DS_Store
+
+# Claude auto-memory
+memory/
