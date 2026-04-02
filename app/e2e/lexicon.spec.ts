@@ -32,6 +32,6 @@ test('hidden note returns 404', async ({ page }) => {
 
 test('second note has backlink to index', async ({ page }) => {
   await page.goto(`/${LEXICON}/second-note`);
-  // Backlinks section should reference "index"
-  await expect(page.getByText(/index/i)).toBeVisible();
+  // Backlinks aside should contain a link to "index"
+  await expect(page.locator('aside').getByRole('link', { name: 'index' })).toBeVisible();
 });

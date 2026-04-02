@@ -4,7 +4,7 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import matter from "gray-matter";
-import { renderMarkdown } from "./markdown";
+import { renderMarkdown, type Heading } from "./markdown";
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION ?? "us-east-1",
@@ -31,7 +31,31 @@ export interface NoteMetadata {
 
 export interface RenderedNote extends NoteMetadata {
   html: string;
+  headings: Heading[];
   backlinks: string[];
+}
+
+export interface SearchEntry {
+  title: string;
+  slug: string;
+  content: string;
+  tags: string[];
+}
+
+export interface GraphNode {
+  id: string;
+  title: string;
+  linkCount: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
 }
 
 async function fetchText(key: string): Promise<string> {
@@ -186,7 +210,7 @@ export async function getNote(
   const { data, content } = matter(raw);
   if (data.publish === false) return null;
 
-  const html = await renderMarkdown(content, {
+  const { html, headings } = await renderMarkdown(content, {
     cloudfrontUrl: CLOUDFRONT_URL,
     s3Prefix,
   });
@@ -202,6 +226,84 @@ export async function getNote(
     tags: Array.isArray(data.tags) ? data.tags : [],
     frontmatter: data,
     html,
+    headings,
     backlinks,
   };
+}
+
+function stripMarkdown(md: string): string {
+  return md
+    .replace(/!\[.*?\]\(.*?\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, "$1")
+    .replace(/#{1,6}\s+/g, "")
+    .replace(/[*_~`]{1,3}/g, "")
+    .replace(/>\s+/g, "")
+    .replace(/\n+/g, " ")
+    .trim();
+}
+
+export async function buildSearchIndex(
+  s3Prefix: string,
+  publishDefault = true
+): Promise<SearchEntry[]> {
+  const notes = await listNotes(s3Prefix, publishDefault);
+  const entries: SearchEntry[] = [];
+
+  for (const note of notes) {
+    let rawContent = "";
+    try {
+      const raw = await fetchText(note.s3Key);
+      const { content } = matter(raw);
+      rawContent = stripMarkdown(content).slice(0, 500);
+    } catch {
+      // fall back to empty content
+    }
+
+    entries.push({
+      title: note.title,
+      slug: note.slug.join("/"),
+      content: rawContent,
+      tags: note.tags,
+    });
+  }
+
+  return entries;
+}
+
+export async function buildGraphData(
+  s3Prefix: string,
+  publishDefault = true
+): Promise<GraphData> {
+  const notes = await listNotes(s3Prefix, publishDefault);
+  const publishedSlugs = new Set(notes.map((n) => n.slug.join("/")));
+
+  const nodeMap = new Map<string, GraphNode>(
+    notes.map((n) => [n.slug.join("/"), { id: n.slug.join("/"), title: n.title, linkCount: 0 }])
+  );
+
+  const edgeSet = new Set<string>();
+  const edges: GraphEdge[] = [];
+  const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+
+  for (const note of notes) {
+    const raw = await fetchText(note.s3Key);
+    const { content } = matter(raw);
+    const sourceId = note.slug.join("/");
+
+    wikilinkRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = wikilinkRegex.exec(content)) !== null) {
+      const target = match[1].trim().toLowerCase().replace(/\s+/g, "-");
+      if (!publishedSlugs.has(target) || target === sourceId) continue;
+      const key = `${sourceId}→${target}`;
+      if (edgeSet.has(key)) continue;
+      edgeSet.add(key);
+      edges.push({ source: sourceId, target });
+      nodeMap.get(sourceId)!.linkCount++;
+      nodeMap.get(target)!.linkCount++;
+    }
+  }
+
+  return { nodes: Array.from(nodeMap.values()), edges };
 }

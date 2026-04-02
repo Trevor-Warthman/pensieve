@@ -17,10 +17,10 @@ function md5(filePath: string): string {
 }
 
 export const syncCommand = new Command("sync")
-  .description("Sync a local directory to a Pensieve lexicon")
-  .argument("<dir>", "Local directory of markdown files")
-  .requiredOption("-l, --lexicon <slug>", "Lexicon slug to sync to")
-  .option("--dry-run", "Show what would be uploaded without uploading")
+  .description("Sync a local directory of markdown files to a Pensieve lexicon. The lexicon must already exist (create it at /dashboard). Re-runs skip unchanged files.")
+  .argument("<dir>", "Local directory of markdown files to sync")
+  .requiredOption("-l, --lexicon <slug>", "Slug of the target lexicon (from /dashboard)")
+  .option("--dry-run", "List files that would be uploaded without uploading anything")
   .action(async (dir: string, opts: { lexicon: string; dryRun?: boolean }) => {
     const absDir = path.resolve(dir);
     if (!fs.existsSync(absDir)) {
