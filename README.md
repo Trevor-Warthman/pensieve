@@ -117,6 +117,80 @@ pensieve/
 
 ---
 
+## Future
+
+Ideas beyond Phase 2, loosely prioritized.
+
+### Content & Discovery
+- [ ] Full-text search with Fuse.js *(MVP gap — Pagefind listed in MVP but not wired at runtime)*
+- [ ] Table of contents sidebar for long notes
+- [ ] Note changelog / revision history (last-updated timestamp surfaced in UI)
+- [ ] Graph view — interactive backlink/link graph (D3) *(Phase 2)*
+- [ ] RSS feed per Lexicon *(Phase 2)*
+
+### Publishing & Authoring
+- [ ] Web-based editor — edit notes in-browser, no local files required
+- [ ] Drag-and-drop file upload in dashboard
+- [ ] Publish toggle from the UI (flip `publish:` without editing frontmatter)
+- [ ] Scheduled publishing (`publish_at` date in frontmatter)
+- [ ] Draft preview links — shareable private URL before publishing
+
+### Lexicon Customization
+- [ ] Custom domains per Lexicon *(Phase 2 — see [Blog Spaces & Domains](#blog-spaces--domains))*
+- [ ] Custom CSS / theme overrides
+- [ ] Lexicon homepage with a pinned/featured note
+- [ ] Custom navigation links (external links in sidebar)
+- [ ] Per-Lexicon font/color scheme picker
+- [ ] Password-protected Lexicons (shared secret, no reader account needed)
+
+### Collaboration
+- [ ] Comments on notes (Giscus/GitHub Discussions or native)
+- [ ] Invite collaborators to a Lexicon (multiple syncing users)
+- [ ] Reader accounts (private Lexicons visible only to specific users)
+
+### Integrations
+- [ ] Auto-rebuild trigger on S3 upload *(Phase 2)*
+- [ ] GitHub Actions integration — auto-sync on push to a repo
+- [ ] Obsidian plugin — sync directly from within Obsidian, no CLI
+- [ ] Bear / Notion / Logseq import
+- [ ] Webhook on publish (notify Slack, Discord, etc.)
+
+### Analytics & Growth
+- [ ] Per-Lexicon page view stats (privacy-respecting, no cookies)
+- [ ] Popular notes / trending content widget
+- [ ] Email newsletter integration (send new notes to subscribers)
+- [ ] Sitemap + SEO metadata generation
+
+### Developer / Power User
+- [ ] `pensieve status` — show which files are unpublished, drifted, or missing
+- [ ] `pensieve diff` — dry-run preview before syncing
+- [ ] Bring-your-own S3 bucket (point at your own AWS account)
+- [ ] Self-hosted mode — Docker Compose for the full stack, no AWS
+
+---
+
+## Blog Spaces & Domains
+
+### URL structure
+
+Three options for Lexicons hosted on Pensieve's own domain:
+
+| Scheme | Example | Notes |
+|---|---|---|
+| `username.pensieve.app/lexicon-slug` | `trevor.pensieve.app/dnd-wiki` | Subdomain per user; multiple Lexicons via path. Clean separation. |
+| `lexicon-slug.pensieve.app` | `dnd-wiki.pensieve.app` | Subdomain per Lexicon; slug must be globally unique. |
+| `pensieve.app/username/lexicon-slug` | `pensieve.app/trevor/dnd-wiki` | GitHub-style paths; no subdomain wildcard needed. |
+
+**Recommendation: `username.pensieve.app/lexicon-slug`**
+
+Users can have many Lexicons (DnD wiki, personal blog, work notes). Scoping subdomains to the user lets them own a clean namespace (`trevor.pensieve.app`) while keeping multiple Lexicons at readable paths underneath it. It also maps cleanly to custom domains — a user with `myblog.com` CNAMEs it to their Pensieve subdomain and all their Lexicons follow.
+
+### Custom domains
+
+A user with `myblog.com` CNAMEs the domain to Pensieve's CloudFront distribution. Pensieve maps the `Host` header to the correct Lexicon. TLS is provisioned via ACM DNS validation (user adds one CNAME record). This is the "Custom domains per Lexicon" Phase 2 item.
+
+---
+
 ## Cost Estimate
 
 Per Lexicon per month (~60GB: 10k markdown + 5k images + 1k videos/audio):

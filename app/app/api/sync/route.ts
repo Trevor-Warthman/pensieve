@@ -14,17 +14,29 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({
   }),
 }));
 
-const s3 = new S3Client({
+const s3Config = process.env.AWS_S3_ENDPOINT ? {
+  endpoint: process.env.AWS_S3_ENDPOINT,
+  forcePathStyle: true as const,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "local",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "local",
+  },
+} : {};
+
+// For S3 operations (listing objects etc) — uses internal Docker endpoint in local dev.
+const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1", ...s3Config });
+
+// For presigning — uses the publicly accessible endpoint so URLs work outside Docker.
+const publicEndpoint = process.env.AWS_S3_PUBLIC_ENDPOINT ?? process.env.AWS_S3_ENDPOINT;
+const s3Presign = publicEndpoint ? new S3Client({
   region: process.env.AWS_REGION ?? "us-east-1",
-  ...(process.env.AWS_S3_ENDPOINT && {
-    endpoint: process.env.AWS_S3_ENDPOINT,
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "local",
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "local",
-    },
-  }),
-});
+  endpoint: publicEndpoint,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "local",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "local",
+  },
+}) : s3;
 
 const BUCKET = process.env.AWS_S3_BUCKET!;
 const LEXICONS_TABLE = process.env.DYNAMODB_LEXICONS_TABLE!;
@@ -71,7 +83,7 @@ export async function POST(req: NextRequest) {
     files.map(async (file) => {
       const key = `${prefix}/${file.path.replace(/^\//, "")}`;
       const url = await getSignedUrl(
-        s3,
+        s3Presign,
         new PutObjectCommand({
           Bucket: BUCKET,
           Key: key,

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLexiconBySlug, lexiconS3Prefix } from "@/lib/db";
 import { getNote, buildBacklinksIndex } from "@/lib/content";
+import TableOfContents from "@/components/TableOfContents";
 
 interface NotePageProps {
   params: Promise<{ lexicon: string; slug: string[] }>;
@@ -18,8 +19,10 @@ export default async function NotePage({ params }: NotePageProps) {
   const note = await getNote(s3Prefix, slug, backlinksIndex);
   if (!note) notFound();
 
+  const showToc = note.headings.filter((h) => h.level <= 3).length >= 3;
+
   return (
-    <main className="flex min-h-screen flex-col px-6 py-16 max-w-4xl mx-auto">
+    <main className="flex min-h-screen gap-12 px-6 py-16 max-w-5xl mx-auto">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-8 flex items-center gap-2">
         <Link href={`/${lexiconSlug}`} className="hover:text-gray-300 transition-colors">
@@ -55,29 +58,33 @@ export default async function NotePage({ params }: NotePageProps) {
         </div>
       )}
 
-      {/* Rendered markdown */}
-      <article
-        className="prose prose-invert prose-gray max-w-none"
-        dangerouslySetInnerHTML={{ __html: note.html }}
-      />
+      <div className="flex-1 min-w-0">
+        {/* Rendered markdown */}
+        <article
+          className="prose prose-invert prose-gray max-w-none"
+          dangerouslySetInnerHTML={{ __html: note.html }}
+        />
 
-      {note.backlinks.length > 0 && (
-        <aside className="mt-16 pt-8 border-t border-gray-800">
-          <h2 className="text-sm uppercase tracking-widest text-gray-500 mb-4">Backlinks</h2>
-          <ul className="space-y-2">
-            {note.backlinks.map((bl) => (
-              <li key={bl}>
-                <Link
-                  href={`/${lexiconSlug}/${bl}`}
-                  className="text-gray-300 hover:text-white transition-colors"
-                >
-                  {bl}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      )}
+        {note.backlinks.length > 0 && (
+          <aside className="mt-16 pt-8 border-t border-gray-800">
+            <h2 className="text-sm uppercase tracking-widest text-gray-500 mb-4">Backlinks</h2>
+            <ul className="space-y-2">
+              {note.backlinks.map((bl) => (
+                <li key={bl}>
+                  <Link
+                    href={`/${lexiconSlug}/${bl}`}
+                    className="text-gray-300 hover:text-white transition-colors"
+                  >
+                    {bl}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
+      </div>
+
+      {showToc && <TableOfContents headings={note.headings.filter((h) => h.level <= 3)} />}
     </main>
   );
 }

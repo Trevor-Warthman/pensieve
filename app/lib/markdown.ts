@@ -13,6 +13,43 @@ interface MarkdownOptions {
   s3Prefix: string;
 }
 
+export interface Heading {
+  id: string;
+  text: string;
+  level: number;
+}
+
+function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function extractHastText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const n = node as { type: string; value?: string; children?: unknown[] };
+  if (n.type === "text") return n.value ?? "";
+  if (n.children) return n.children.map(extractHastText).join("");
+  return "";
+}
+
+function makeRehypeHeadingIds(collected: Heading[]): Plugin<[], never> {
+  return () => (tree) => {
+    visit(tree as never, "element", (node: unknown) => {
+      const el = node as { tagName: string; properties: Record<string, unknown>; children: unknown[] };
+      if (!/^h[1-6]$/.test(el.tagName)) return;
+      const level = parseInt(el.tagName[1], 10);
+      const text = extractHastText(el);
+      const id = slugifyHeading(text) || `heading-${collected.length + 1}`;
+      el.properties = { ...el.properties, id };
+      collected.push({ id, text, level });
+    });
+  };
+}
+
 /** Remark plugin: convert [[Wikilinks]] → <a> tags */
 const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
   return (tree) => {
@@ -126,7 +163,8 @@ const remarkRewriteAssets: Plugin<[MarkdownOptions], Root> = ({ cloudfrontUrl, s
 export async function renderMarkdown(
   content: string,
   options: MarkdownOptions
-): Promise<string> {
+): Promise<{ html: string; headings: Heading[] }> {
+  const headings: Heading[] = [];
   const result = await unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -135,8 +173,9 @@ export async function renderMarkdown(
     .use(remarkRewriteAssets, options)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
+    .use(makeRehypeHeadingIds(headings))
     .use(rehypeStringify)
     .process(content);
 
-  return String(result);
+  return { html: String(result), headings };
 }

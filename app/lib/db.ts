@@ -32,7 +32,6 @@ export async function getLexiconBySlug(slug: string): Promise<Lexicon | null> {
       FilterExpression: "slug = :slug AND (#s = :active OR attribute_not_exists(#s))",
       ExpressionAttributeNames: { "#s": "status" },
       ExpressionAttributeValues: { ":slug": slug, ":active": "active" },
-      Limit: 1,
     })
   );
   return (result.Items?.[0] as Lexicon) ?? null;

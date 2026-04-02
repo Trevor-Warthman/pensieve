@@ -97,6 +97,131 @@ All local env vars live in `app/.env.local`. Do not commit secrets — `JWT_SECR
 
 ---
 
+## Using the CLI locally
+
+The CLI lives in `cli/`. Build it once before use, then rebuild whenever you change CLI source.
+
+```bash
+cd cli
+npm install
+npm run build   # outputs to cli/dist/index.js
+```
+
+### 1. Point the CLI at the local server
+
+```bash
+node dist/index.js config init --api-endpoint http://localhost:3000/api
+```
+
+### 2. Create an account and log in
+
+Register (skips email confirmation locally):
+
+```bash
+node dist/index.js register --local
+```
+
+Or if you already have an account:
+
+```bash
+node dist/index.js login --local
+```
+
+`--local` routes auth through the Next.js API instead of AWS Cognito. It only works when `apiEndpoint` is `localhost`.
+
+### 3. Sync a vault
+
+```bash
+node dist/index.js sync /path/to/your/vault --lexicon <slug>
+```
+
+- The lexicon must already exist (create it at http://localhost:3000/dashboard first).
+- Re-running sync skips unchanged files (compares MD5 against S3 ETags).
+- `--dry-run` lists what would be uploaded without touching anything.
+
+### Running the CLI from anywhere during development
+
+Add a shell alias so you don't have to type the full path:
+
+```bash
+alias pensieve="node $(pwd)/dist/index.js"
+```
+
+Or use `npm link` in the `cli/` directory to install it as a global `pensieve` command.
+
+---
+
+## Publishing the CLI to npm
+
+When the CLI is ready for real users, publish it to npm so they can install it with:
+
+```bash
+npm install -g pensieve-markdown
+```
+
+The package is named `pensieve-markdown` (`pensieve` and `pensieve-cli` are already taken on npm). The installed binary is still called `pensieve`.
+
+### Before publishing
+
+**1. Verify the name is still available**
+
+```bash
+npm show pensieve-markdown
+```
+
+**2. Fill in the missing package.json fields**
+
+Open `cli/package.json` and add:
+
+```json
+"author": "Your Name <you@example.com>",
+"repository": {
+  "type": "git",
+  "url": "https://github.com/your-org/pensieve"
+},
+"homepage": "https://github.com/your-org/pensieve#readme"
+```
+
+**3. Make sure the version is right**
+
+`package.json` currently has `"version": "0.1.0"`. That's fine for a first publish. Subsequent releases: bump the version before publishing.
+
+```bash
+cd cli
+npm version patch   # 0.1.0 → 0.1.1 (bug fix)
+npm version minor   # 0.1.0 → 0.2.0 (new feature)
+npm version major   # 0.1.0 → 1.0.0 (breaking change)
+```
+
+Each of these commits the bump and tags the git commit automatically.
+
+### Publishing
+
+```bash
+npm login          # one-time — logs you into npmjs.com
+cd cli
+npm publish        # runs `npm run build` first via prepublishOnly, then uploads
+```
+
+### What gets published
+
+Only the `dist/` directory is included (controlled by the `"files"` field in `package.json`). TypeScript source is not shipped. The `bin.pensieve` field wires up the `pensieve` command automatically when installed globally.
+
+### Subsequent releases
+
+```bash
+cd cli
+npm version patch
+npm publish
+git push && git push --tags
+```
+
+### GitHub Actions (optional)
+
+To automate releases, add a workflow that runs `npm publish` on a new tag push. The workflow needs an `NPM_TOKEN` secret (create at npmjs.com → Access Tokens → Automation token, add to GitHub repo secrets).
+
+---
+
 ## Deploying to AWS
 
 See [infra/](infra/) for Terraform. Resources are environment-scoped — `dev` and `prod` can coexist in the same AWS account.

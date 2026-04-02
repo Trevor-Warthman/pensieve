@@ -8,12 +8,12 @@ export const configCommand = new Command("config")
 
 configCommand
   .command("init")
-  .description("Set infra connection values (run once after terraform apply)")
-  .option("--api-endpoint <url>", "API Gateway endpoint")
-  .option("--cognito-pool-id <id>", "Cognito User Pool ID")
-  .option("--cognito-client-id <id>", "Cognito User Pool Client ID")
-  .option("--s3-bucket <bucket>", "S3 content bucket name")
-  .option("--from-terraform [dir]", "Read values from terraform output -json (optional path to infra dir)")
+  .description("Set the API endpoint and credentials. Local dev: --api-endpoint http://localhost:3000/api. Production: use --from-terraform or pass Cognito values manually.")
+  .option("--api-endpoint <url>", "API endpoint URL (e.g. http://localhost:3000/api for local dev, or API Gateway URL for prod)")
+  .option("--cognito-pool-id <id>", "Cognito User Pool ID (production only)")
+  .option("--cognito-client-id <id>", "Cognito User Pool Client ID (production only)")
+  .option("--s3-bucket <bucket>", "S3 content bucket name (production only)")
+  .option("--from-terraform [dir]", "Read all values from `terraform output -json` (optional path to infra dir, defaults to cwd)")
   .action((opts: {
     apiEndpoint?: string;
     cognitoPoolId?: string;

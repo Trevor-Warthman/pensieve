@@ -1,5 +1,11 @@
 {
-  "name": "pensieve-cli",
+  "name": "pensieve-markdown",
+  "author": "Trevor Warthman <twarthman104@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Trevor-Warthman/pensieve"
+  },
+  "homepage": "https://github.com/Trevor-Warthman/pensieve#readme",
   "version": "0.1.0",
   "description": "CLI tool for syncing local markdown files to Pensieve",
   "main": "dist/index.js",
@@ -17,7 +23,12 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["pensieve", "markdown", "blog", "sync"],
+  "keywords": [
+    "pensieve",
+    "markdown",
+    "blog",
+    "sync"
+  ],
   "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1019.0",
