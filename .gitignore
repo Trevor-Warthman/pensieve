@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env.local
+.env*.local
+.env
+
+# Next.js
+app/.next/
+app/tsconfig.tsbuildinfo
+
+# CLI build output
+cli/dist/
+
+# Pagefind (generated search index, rebuilt at deploy)
+app/public/pagefind/
+
+# Test artifacts
+app/test-results/
+app/playwright-report/
+
+# Terraform
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/*.tfplan
+
+# Lambda build artifacts (zips are built from lambda/src, not committed)
+infra/lambda-src/*.zip
+
+# macOS
+.DS_Store

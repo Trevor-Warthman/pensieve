@@ -1,0 +1,39 @@
+{
+  "name": "pensieve-cli",
+  "version": "0.1.0",
+  "description": "CLI tool for syncing local markdown files to Pensieve",
+  "main": "dist/index.js",
+  "bin": {
+    "pensieve": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["pensieve", "markdown", "blog", "sync"],
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1019.0",
+    "@aws-sdk/client-s3": "^3.1019.0",
+    "@aws-sdk/lib-storage": "^3.1019.0",
+    "@inquirer/prompts": "^8.3.2",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "conf": "^15.1.0",
+    "glob": "^13.0.6",
+    "gray-matter": "^4.0.3",
+    "ora": "^9.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}
