@@ -11,6 +11,7 @@ import { visit } from "unist-util-visit";
 interface MarkdownOptions {
   cloudfrontUrl: string;
   s3Prefix: string;
+  assets?: Record<string, string>; // lowercase basename → relative path
 }
 
 export interface Heading {
@@ -76,16 +77,23 @@ const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
         const trimmedTarget = target.trim();
 
         if (bang === "!" && IMAGE_EXTS.test(trimmedTarget)) {
-          // Obsidian image embed → img node
+          // Obsidian image embed: ![[filename.png|width]] or ![[path/to/img.png]]
+          // Resolve bare filenames via asset map (Obsidian shortest-path lookup)
+          const basename = trimmedTarget.split("/").pop()!.toLowerCase();
+          const resolvedPath = options.assets?.[basename] ?? trimmedTarget;
           const s3Prefix = options.s3Prefix.endsWith("/")
             ? options.s3Prefix
             : `${options.s3Prefix}/`;
-          const src = `${options.cloudfrontUrl}/${s3Prefix}${trimmedTarget.replace(/^\//, "")}`;
+          const src = `${options.cloudfrontUrl}/${s3Prefix}${resolvedPath.replace(/^\//, "")}`;
+
+          // alias may be a pixel width: ![[img.png|400]]
+          const widthNum = alias && /^\d+$/.test(alias.trim()) ? alias.trim() : null;
+          const altText = widthNum ? basename : (alias?.trim() ?? basename);
+
           children.push({
-            type: "image",
-            url: src,
-            alt: alias?.trim() ?? trimmedTarget,
-          });
+            type: "html",
+            value: `<img src="${src}" alt="${altText}"${widthNum ? ` width="${widthNum}"` : ""} style="max-width:100%" />`,
+          } as never);
         } else {
           // Regular wikilink → anchor
           const href = trimmedTarget.toLowerCase().replace(/\s+/g, "-");

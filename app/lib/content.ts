@@ -63,6 +63,7 @@ interface Manifest {
   version: number;
   notes: Array<{ slug: string; title: string; tags: string[] }>;
   backlinks: Record<string, string[]>;
+  assets?: Record<string, string>; // lowercase basename → relative path
 }
 
 async function fetchText(key: string): Promise<string> {
@@ -170,6 +171,15 @@ export const listNotes = cache(async (
   return notes;
 });
 
+/** Fetch the asset map (filename → relative path) from manifest. */
+export const getAssetMap = cache(async (
+  s3Prefix: string
+): Promise<Record<string, string>> => {
+  const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
+  const manifest = await fetchManifest(prefix);
+  return manifest?.assets ?? {};
+});
+
 /** Build backlinks index. Uses manifest if available (1 S3 request). */
 export const buildBacklinksIndex = cache(async (
   s3Prefix: string
@@ -217,7 +227,8 @@ export const buildBacklinksIndex = cache(async (
 export async function getNote(
   s3Prefix: string,
   slugPath: string[],
-  backlinksIndex?: Map<string, string[]>
+  backlinksIndex?: Map<string, string[]>,
+  assets?: Record<string, string>
 ): Promise<RenderedNote | null> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const key = `${prefix}${slugPath.join("/")}.md`;
@@ -235,6 +246,7 @@ export async function getNote(
   const { html, headings } = await renderMarkdown(content, {
     cloudfrontUrl: CLOUDFRONT_URL,
     s3Prefix,
+    assets,
   });
 
   const slugStr = slugPath.join("/").toLowerCase();

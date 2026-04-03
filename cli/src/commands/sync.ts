@@ -44,9 +44,10 @@ interface Manifest {
   generatedAt: string;
   notes: ManifestNote[];
   backlinks: Record<string, string[]>;
+  assets: Record<string, string>; // lowercase basename → relative path
 }
 
-function buildManifest(mdFiles: string[], absDir: string): Manifest {
+function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string): Manifest {
   const wikilinkRegex = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
   const notes: ManifestNote[] = [];
   const backlinks: Record<string, string[]> = {};
@@ -73,7 +74,15 @@ function buildManifest(mdFiles: string[], absDir: string): Manifest {
     }
   }
 
-  return { version: 1, generatedAt: new Date().toISOString(), notes, backlinks };
+  // Build asset lookup: lowercase basename → relative path
+  const assets: Record<string, string> = {};
+  for (const file of assetFiles) {
+    const rel = path.relative(absDir, file).replace(/\\/g, "/");
+    const basename = path.basename(file).toLowerCase();
+    assets[basename] = rel;
+  }
+
+  return { version: 1, generatedAt: new Date().toISOString(), notes, backlinks, assets };
 }
 
 async function requestUploadUrls(
@@ -148,7 +157,7 @@ Examples:
 
     // ── Build manifest ───────────────────────────────────────────────────────
     const manifestSpinner = ora("Building manifest...").start();
-    const manifest = buildManifest(mdFiles, absDir);
+    const manifest = buildManifest(mdFiles, assetFiles, absDir);
     const manifestBuf = Buffer.from(JSON.stringify(manifest));
     manifestSpinner.succeed("Manifest ready");
 
