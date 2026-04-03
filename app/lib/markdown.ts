@@ -50,16 +50,19 @@ function makeRehypeHeadingIds(collected: Heading[]) {
   };
 }
 
-/** Remark plugin: convert [[Wikilinks]] → <a> tags */
+const IMAGE_EXTS = /\.(png|jpe?g|gif|svg|webp|avif|mp4|pdf)$/i;
+
+/** Remark plugin: convert [[Wikilinks]] → <a> and ![[image.ext]] → <img> */
 const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
   return (tree) => {
     visit(tree, "text", (node, index, parent) => {
-      const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
+      // Matches both ![[...]] (image embed) and [[...]] (link)
+      const wikilinkRegex = /(!?)\[\[([^\]]+)\]\]/g;
       const text = node.value;
       if (!wikilinkRegex.test(text)) return;
 
       wikilinkRegex.lastIndex = 0;
-      const children: Array<{ type: string; value?: string; url?: string; children?: unknown[] }> = [];
+      const children: Array<{ type: string; value?: string; url?: string; alt?: string; children?: unknown[] }> = [];
       let last = 0;
       let match: RegExpExecArray | null;
 
@@ -68,15 +71,30 @@ const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
           children.push({ type: "text", value: text.slice(last, match.index) });
         }
 
-        const [, inner] = match;
+        const [, bang, inner] = match;
         const [target, alias] = inner.split("|");
-        const href = target.trim().toLowerCase().replace(/\s+/g, "-");
+        const trimmedTarget = target.trim();
 
-        children.push({
-          type: "link",
-          url: href,
-          children: [{ type: "text", value: (alias ?? target).trim() }],
-        });
+        if (bang === "!" && IMAGE_EXTS.test(trimmedTarget)) {
+          // Obsidian image embed → img node
+          const s3Prefix = options.s3Prefix.endsWith("/")
+            ? options.s3Prefix
+            : `${options.s3Prefix}/`;
+          const src = `${options.cloudfrontUrl}/${s3Prefix}${trimmedTarget.replace(/^\//, "")}`;
+          children.push({
+            type: "image",
+            url: src,
+            alt: alias?.trim() ?? trimmedTarget,
+          });
+        } else {
+          // Regular wikilink → anchor
+          const href = trimmedTarget.toLowerCase().replace(/\s+/g, "-");
+          children.push({
+            type: "link",
+            url: href,
+            children: [{ type: "text", value: (alias ?? trimmedTarget).trim() }],
+          });
+        }
 
         last = match.index + match[0].length;
       }
