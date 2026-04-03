@@ -15,8 +15,9 @@ export default async function NotePage({ params }: NotePageProps) {
   if (!lexicon) notFound();
 
   const s3Prefix = lexiconS3Prefix(lexicon);
+  const decodedSlug = slug.map((s) => decodeURIComponent(s));
   const backlinksIndex = await buildBacklinksIndex(s3Prefix);
-  const note = await getNote(s3Prefix, slug, backlinksIndex);
+  const note = await getNote(s3Prefix, decodedSlug, backlinksIndex);
   if (!note) notFound();
 
   const showToc = note.headings.filter((h) => h.level <= 3).length >= 3;
@@ -28,11 +29,11 @@ export default async function NotePage({ params }: NotePageProps) {
         <Link href={`/${lexiconSlug}`} className="hover:text-gray-900 dark:hover:text-gray-300 transition-colors">
           {lexicon.title}
         </Link>
-        {slug.slice(0, -1).map((segment, i) => (
+        {decodedSlug.slice(0, -1).map((segment, i) => (
           <span key={i} className="flex items-center gap-1.5">
             <span>/</span>
             <Link
-              href={`/${lexiconSlug}/${slug.slice(0, i + 1).join("/")}`}
+              href={`/${lexiconSlug}/${decodedSlug.slice(0, i + 1).join("/")}`}
               className="hover:text-gray-900 dark:hover:text-gray-300 transition-colors"
             >
               {segment}
