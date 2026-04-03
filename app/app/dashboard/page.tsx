@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Lexicon {
   lexiconId: string;
@@ -44,6 +45,9 @@ export default function DashboardPage() {
 
   return (
     <main className="flex min-h-screen flex-col px-6 py-16 max-w-4xl mx-auto">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="flex items-end justify-between mb-10">
         <div>
           <p className="text-sm text-gray-500 uppercase tracking-widest mb-2">Account</p>
