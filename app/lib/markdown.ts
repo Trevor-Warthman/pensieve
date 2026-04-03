@@ -36,8 +36,8 @@ function extractHastText(node: unknown): string {
   return "";
 }
 
-function makeRehypeHeadingIds(collected: Heading[]): Plugin<[], never> {
-  return () => (tree) => {
+function makeRehypeHeadingIds(collected: Heading[]) {
+  return () => (tree: unknown) => {
     visit(tree as never, "element", (node: unknown) => {
       const el = node as { tagName: string; properties: Record<string, unknown>; children: unknown[] };
       if (!/^h[1-6]$/.test(el.tagName)) return;
