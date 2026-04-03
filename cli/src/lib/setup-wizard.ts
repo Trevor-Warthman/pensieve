@@ -28,7 +28,7 @@ async function configureEndpoint(): Promise<void> {
   if (mode === "local") {
     const url = await input({
       message: "Local API endpoint:",
-      default: "http://localhost:3000/api",
+      default: "http://localhost:3001/api",
     });
     config.set("apiEndpoint", url);
     console.log(chalk.green("API endpoint saved."));
