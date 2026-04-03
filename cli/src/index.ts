@@ -17,6 +17,18 @@ program.addCommand(registerCommand);
 program.addCommand(syncCommand);
 program.addCommand(configCommand);
 
+for (const cmd of [loginCommand, registerCommand]) {
+  cmd.hook("preAction", async () => {
+    const { runSetupIfNeeded } = await import("./lib/setup-wizard");
+    await runSetupIfNeeded({ requireAuth: false });
+  });
+}
+
+syncCommand.hook("preAction", async () => {
+  const { runSetupIfNeeded } = await import("./lib/setup-wizard");
+  await runSetupIfNeeded();
+});
+
 program
   .command("logout")
   .description("Clear stored credentials")

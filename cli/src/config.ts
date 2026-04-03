@@ -26,6 +26,9 @@ export const config = {
   isAuthenticated(): boolean {
     return !!conf.get("accessToken");
   },
+  delete<K extends keyof PensieveConfig>(key: K): void {
+    conf.delete(key);
+  },
   clear(): void {
     conf.clear();
   },

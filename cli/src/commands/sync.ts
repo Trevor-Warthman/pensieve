@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as crypto from "crypto";
 import chalk from "chalk";
 import ora from "ora";
+import { input } from "@inquirer/prompts";
 import { config } from "../config";
 import { getPublishableFiles } from "../lib/publish-filter";
 
@@ -18,10 +19,21 @@ function md5(filePath: string): string {
 
 export const syncCommand = new Command("sync")
   .description("Sync a local directory of markdown files to a Pensieve lexicon. The lexicon must already exist (create it at /dashboard). Re-runs skip unchanged files.")
-  .argument("<dir>", "Local directory of markdown files to sync")
-  .requiredOption("-l, --lexicon <slug>", "Slug of the target lexicon (from /dashboard)")
+  .usage("<dir> --lexicon <slug> [--dry-run]")
+  .argument("[dir]", "Local directory of markdown files to sync")
+  .option("-l, --lexicon <slug>", "Slug of the target lexicon (from /dashboard)")
   .option("--dry-run", "List files that would be uploaded without uploading anything")
-  .action(async (dir: string, opts: { lexicon: string; dryRun?: boolean }) => {
+  .addHelpText("after", `
+Examples:
+  pensieve sync ./notes --lexicon my-lexicon
+  pensieve sync ./notes --lexicon my-lexicon --dry-run`)
+  .action(async (dir: string | undefined, opts: { lexicon?: string; dryRun?: boolean }) => {
+    if (!dir) {
+      dir = await input({ message: "Directory to sync (e.g. ./notes or /Users/you/notes):" });
+    }
+    if (!opts.lexicon) {
+      opts.lexicon = await input({ message: "Lexicon slug (lowercase, hyphens only, e.g. my-lexicon):" });
+    }
     const absDir = path.resolve(dir);
     if (!fs.existsSync(absDir)) {
       console.error(chalk.red(`Directory not found: ${absDir}`));
@@ -73,12 +85,30 @@ export const syncCommand = new Command("sync")
         body: JSON.stringify({ lexiconSlug: opts.lexicon, files: fileList }),
       });
 
-      if (!res.ok) {
+      if (res.status === 401) {
+        urlSpinner.fail("Session expired — re-authenticating...");
+        config.delete("accessToken");
+        const { runSetupIfNeeded } = await import("../lib/setup-wizard");
+        await runSetupIfNeeded();
+        const retryRes = await fetch(`${apiEndpoint}/sync`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.get("accessToken")}`,
+          },
+          body: JSON.stringify({ lexiconSlug: opts.lexicon, files: fileList }),
+        });
+        if (!retryRes.ok) {
+          const body = await retryRes.json() as { error?: string };
+          throw new Error(body.error ?? `HTTP ${retryRes.status}`);
+        }
+        syncData = await retryRes.json() as SyncResponse;
+      } else if (!res.ok) {
         const body = await res.json() as { error?: string };
         throw new Error(body.error ?? `HTTP ${res.status}`);
+      } else {
+        syncData = await res.json() as SyncResponse;
       }
-
-      syncData = await res.json() as SyncResponse;
     } catch (err: unknown) {
       urlSpinner.fail("Failed to get upload URLs");
       console.error(chalk.red(err instanceof Error ? err.message : String(err)));
