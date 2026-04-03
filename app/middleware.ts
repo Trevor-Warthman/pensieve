@@ -5,7 +5,8 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get("pensieve_token")?.value;
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/dashboard") && !token) {
+  const isProtected = pathname.startsWith("/dashboard") || pathname.startsWith("/settings");
+  if (isProtected && !token) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -13,5 +14,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/dashboard/:path*", "/settings/:path*", "/settings"],
 };

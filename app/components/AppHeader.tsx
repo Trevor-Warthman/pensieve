@@ -24,9 +24,12 @@ export default function AppHeader({ email }: AppHeaderProps) {
       </Link>
       <div className="flex items-center gap-4">
         {email && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
+          <Link
+            href="/settings"
+            className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block hover:text-gray-900 dark:hover:text-white transition-colors"
+          >
             {email}
-          </span>
+          </Link>
         )}
         <ThemeToggle />
         <button
