@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import ThemeToggle from "@/components/ThemeToggle";
+import AppHeader from "@/components/AppHeader";
 
 interface Lexicon {
   lexiconId: string;
@@ -20,6 +20,7 @@ export default function DashboardPage() {
   const [createdSlug, setCreatedSlug] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL;
 
@@ -41,22 +42,24 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => { fetchLexicons(); }, []);
+  useEffect(() => {
+    setEmail(localStorage.getItem("pensieve_email"));
+    fetchLexicons();
+  }, []);
 
   return (
-    <main className="flex min-h-screen flex-col px-6 py-16 max-w-4xl mx-auto">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
+    <div className="flex min-h-screen flex-col">
+      <AppHeader email={email} />
+      <main className="flex-1 px-6 py-12 max-w-4xl mx-auto w-full">
       <div className="flex items-end justify-between mb-10">
         <div>
           <p className="text-sm text-gray-500 uppercase tracking-widest mb-2">Account</p>
-          <h1 className="text-4xl font-bold text-white">Dashboard</h1>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
         </div>
         {view === "list" && (
           <button
             onClick={() => setView("create")}
-            className="px-4 py-2 rounded bg-white text-gray-950 text-sm font-medium hover:bg-gray-100 transition-colors"
+            className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 transition-opacity"
           >
             New Lexicon
           </button>
@@ -81,7 +84,8 @@ export default function DashboardPage() {
           onRefresh={fetchLexicons}
         />
       )}
-    </main>
+      </main>
+    </div>
   );
 }
 

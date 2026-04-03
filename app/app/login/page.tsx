@@ -29,6 +29,7 @@ export default function LoginPage() {
 
       // localStorage for API calls; cookie for middleware auth check
       localStorage.setItem("pensieve_token", body.accessToken);
+      localStorage.setItem("pensieve_email", email);
       document.cookie = `pensieve_token=${body.accessToken}; path=/; SameSite=Strict`;
       router.push("/dashboard");
     } catch (err) {

@@ -34,6 +34,7 @@ export default function RegisterPage() {
 
       if (body.accessToken) {
         localStorage.setItem("pensieve_token", body.accessToken);
+        localStorage.setItem("pensieve_email", email);
         document.cookie = `pensieve_token=${body.accessToken}; path=/; SameSite=Strict`;
         router.push("/dashboard");
       } else {
