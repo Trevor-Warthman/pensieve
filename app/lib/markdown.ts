@@ -167,6 +167,21 @@ const remarkCallouts: Plugin<[], Root> = () => {
   };
 };
 
+/** Rehype plugin: add target="_blank" rel="noopener noreferrer" to external links */
+function rehypeExternalLinks() {
+  return (tree: unknown) => {
+    visit(tree as never, "element", (node: unknown) => {
+      const el = node as { tagName: string; properties: Record<string, unknown> };
+      if (el.tagName !== "a") return;
+      const href = el.properties.href as string | undefined;
+      if (href?.startsWith("http://") || href?.startsWith("https://")) {
+        el.properties.target = "_blank";
+        el.properties.rel = "noopener noreferrer";
+      }
+    });
+  };
+}
+
 /** Remark plugin: rewrite relative image/asset paths to CloudFront URLs */
 const remarkRewriteAssets: Plugin<[MarkdownOptions], Root> = ({ cloudfrontUrl, s3Prefix }) => {
   return (tree) => {
@@ -192,6 +207,7 @@ export async function renderMarkdown(
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
     .use(makeRehypeHeadingIds(headings))
+    .use(rehypeExternalLinks)
     .use(rehypeStringify)
     .process(content);
 
