@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { mkdirSync } from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BASE = 'http://localhost:3004';
+const BASE = 'http://localhost:3001';
 const SHOTS = path.resolve(__dirname, '../audit-shots');
 mkdirSync(SHOTS, { recursive: true });
 
