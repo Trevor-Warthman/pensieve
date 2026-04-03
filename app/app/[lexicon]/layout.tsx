@@ -1,5 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import SearchBar from "@/components/SearchBar";
 import SidebarWrapper from "@/components/SidebarWrapper";
 import PageSearch from "@/components/PageSearch";
@@ -61,6 +63,20 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
   const { lexicon: slug } = await params;
   const lexicon = await getLexiconBySlug(slug);
   if (!lexicon) notFound();
+
+  // Password gate: check for valid access cookie
+  if (lexicon.passwordHash) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(`lex_${slug}`)?.value;
+    let valid = false;
+    if (token) {
+      try {
+        const payload = jwt.verify(token, process.env.JWT_SECRET!) as { lexiconSlug: string };
+        valid = payload.lexiconSlug === slug;
+      } catch { /* invalid token */ }
+    }
+    if (!valid) redirect(`/auth/${slug}`);
+  }
 
   const notes = await listNotes(lexiconS3Prefix(lexicon), lexicon.publishDefault);
   const sidebarItems = buildSidebarTree(notes, slug);

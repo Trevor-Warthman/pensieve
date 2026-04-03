@@ -22,6 +22,8 @@ export interface Lexicon {
   publishDefault: boolean;
   status: "active" | "unpublished";
   createdAt: string;
+  description?: string;
+  passwordHash?: string;
 }
 
 /** Resolve a public slug to its S3 prefix (userId/lexiconId). Only returns active lexicons. */

@@ -10,13 +10,18 @@ interface Lexicon {
   publishDefault: boolean;
   status?: "active" | "unpublished";
   createdAt: string;
+  description?: string;
+  passwordHash?: string;
 }
 
-type View = "list" | "create" | "success";
+type View = "list" | "create" | "success" | { settings: string };
 
 export default function DashboardPage() {
   const [lexicons, setLexicons] = useState<Lexicon[]>([]);
   const [view, setView] = useState<View>("list");
+  const settingsLexicon = typeof view === "object" && "settings" in view
+    ? lexicons.find((l) => l.lexiconId === view.settings) ?? null
+    : null;
   const [createdSlug, setCreatedSlug] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +69,14 @@ export default function DashboardPage() {
             New Lexicon
           </button>
         )}
+        {settingsLexicon && (
+          <button
+            onClick={() => setView("list")}
+            className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+          >
+            ← Back
+          </button>
+        )}
       </div>
 
       {view === "create" ? (
@@ -74,6 +87,13 @@ export default function DashboardPage() {
         />
       ) : view === "success" ? (
         <NextSteps slug={createdSlug} onDone={() => setView("list")} />
+      ) : settingsLexicon ? (
+        <LexiconSettings
+          lexicon={settingsLexicon}
+          apiBase={apiBase}
+          onSaved={() => { fetchLexicons(); setView("list"); }}
+          onCancel={() => setView("list")}
+        />
       ) : (
         <LexiconList
           lexicons={lexicons}
@@ -81,6 +101,7 @@ export default function DashboardPage() {
           error={error}
           apiBase={apiBase}
           onCreateClick={() => setView("create")}
+          onSettingsClick={(id) => setView({ settings: id })}
           onRefresh={fetchLexicons}
         />
       )}
@@ -95,6 +116,7 @@ function LexiconList({
   error,
   apiBase,
   onCreateClick,
+  onSettingsClick,
   onRefresh,
 }: {
   lexicons: Lexicon[];
@@ -102,6 +124,7 @@ function LexiconList({
   error: string | null;
   apiBase: string | undefined;
   onCreateClick: () => void;
+  onSettingsClick: (id: string) => void;
   onRefresh: () => void;
 }) {
   const [actionError, setActionError] = useState<string | null>(null);
@@ -206,6 +229,11 @@ function LexiconList({
                 <Link href={`/${lex.slug}`} className="group flex-1 min-w-0 mr-4">
                   <div className="flex items-center gap-2">
                     <p className="text-gray-900 dark:text-white font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate transition-colors">{lex.title}</p>
+                    {lex.passwordHash && (
+                      <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">
+                        🔒 private
+                      </span>
+                    )}
                     {isUnpublished && (
                       <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 border border-gray-200 dark:border-gray-700">
                         offline
@@ -213,7 +241,7 @@ function LexiconList({
                     )}
                   </div>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                    /{lex.slug} · publish default: {lex.publishDefault ? "public" : "private"}
+                    /{lex.slug}{lex.description ? ` · ${lex.description}` : ` · ${lex.publishDefault ? "public" : "private"} by default`}
                   </p>
                 </Link>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -237,6 +265,12 @@ function LexiconList({
                   ) : (
                     <>
                       <button
+                        onClick={() => onSettingsClick(lex.lexiconId)}
+                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                      >
+                        Settings
+                      </button>
+                      <button
                         onClick={() => toggleStatus(lex)}
                         disabled={isBusy}
                         className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 disabled:opacity-50 transition-colors"
@@ -258,6 +292,191 @@ function LexiconList({
         })}
       </ul>
     </div>
+  );
+}
+
+function LexiconSettings({
+  lexicon,
+  apiBase,
+  onSaved,
+  onCancel,
+}: {
+  lexicon: Lexicon;
+  apiBase: string | undefined;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [title, setTitle] = useState(lexicon.title);
+  const [description, setDescription] = useState(lexicon.description ?? "");
+  const [slug, setSlug] = useState(lexicon.slug);
+  const [publishDefault, setPublishDefault] = useState(lexicon.publishDefault);
+  const [password, setPassword] = useState("");
+  const [clearPassword, setClearPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasPassword = !!lexicon.passwordHash;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!apiBase) return;
+    const token = localStorage.getItem("pensieve_token");
+    if (!token) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    const body: Record<string, unknown> = {
+      title,
+      description: description || null,
+      publishDefault,
+    };
+    if (slug !== lexicon.slug) body.slug = slug;
+    if (clearPassword) body.password = null;
+    else if (password) body.password = password;
+
+    try {
+      const res = await fetch(`${apiBase}/lexicons/${lexicon.lexiconId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-md space-y-6">
+      <div>
+        <p className="text-sm text-gray-500 uppercase tracking-widest mb-1">Lexicon</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h2>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-gray-600 dark:text-gray-400">Title</label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-gray-600 dark:text-gray-400">Description</label>
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="A short description of this lexicon"
+          className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-gray-600 dark:text-gray-400">URL slug</label>
+        <div className="flex items-center rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden focus-within:border-gray-400 dark:focus-within:border-gray-500">
+          <span className="px-3 py-2 text-sm text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 select-none">pensieve.pub/</span>
+          <input
+            type="text"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+            required
+            pattern="[a-z0-9-]+"
+            className="flex-1 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 font-mono bg-transparent outline-none"
+          />
+        </div>
+        {slug !== lexicon.slug && (
+          <p className="text-xs text-amber-500">Changing the slug changes your public URL. Old links will break.</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          id="publishDefault"
+          checked={publishDefault}
+          onChange={(e) => setPublishDefault(e.target.checked)}
+          className="rounded border-gray-300 dark:border-gray-600"
+        />
+        <label htmlFor="publishDefault" className="text-sm text-gray-600 dark:text-gray-400">
+          Publish notes by default (can override with <code className="text-xs">publish: false</code> frontmatter)
+        </label>
+      </div>
+
+      <div className="space-y-2 border-t border-gray-100 dark:border-gray-800 pt-5">
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-gray-600 dark:text-gray-400">
+            Password protection {hasPassword && <span className="text-xs text-gray-400">(currently set)</span>}
+          </label>
+          {hasPassword && !clearPassword && (
+            <button
+              type="button"
+              onClick={() => { setClearPassword(true); setPassword(""); }}
+              className="text-xs text-red-500 hover:text-red-600 transition-colors"
+            >
+              Remove password
+            </button>
+          )}
+        </div>
+        {clearPassword ? (
+          <p className="text-xs text-amber-500">
+            Password will be removed on save.{" "}
+            <button type="button" onClick={() => setClearPassword(false)} className="underline">Undo</button>
+          </p>
+        ) : (
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={hasPassword ? "Enter new password to change" : "Set a password (leave blank for public)"}
+              className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500 pr-16"
+            />
+            {password && (
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            )}
+          </div>
+        )}
+        {!hasPassword && !password && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">Anyone with the URL can view this lexicon.</p>
+        )}
+      </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+        >
+          {submitting ? "Saving…" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
