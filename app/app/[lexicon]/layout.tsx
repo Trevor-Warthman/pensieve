@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { createHmac } from "crypto";
+import { createHmac } from "node:crypto";
 import SearchBar from "@/components/SearchBar";
 import SidebarWrapper from "@/components/SidebarWrapper";
 import PageSearch from "@/components/PageSearch";
