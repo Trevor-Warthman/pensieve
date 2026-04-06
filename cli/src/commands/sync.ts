@@ -93,7 +93,9 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
   return { version: 1, generatedAt: new Date().toISOString(), notes, backlinks, assets };
 }
 
-async function requestUploadUrls(
+const SYNC_CHUNK_SIZE = 200;
+
+async function requestUploadUrlsChunk(
   apiEndpoint: string,
   accessToken: string,
   lexiconSlug: string,
@@ -112,10 +114,37 @@ async function requestUploadUrls(
     throw new Error("UNAUTHORIZED");
   }
   if (!res.ok) {
-    const body = await res.json() as { error?: string };
-    throw new Error(body.error ?? `HTTP ${res.status}`);
+    const text = await res.text();
+    let message: string;
+    try {
+      const body = JSON.parse(text) as { error?: string };
+      message = body.error ?? `HTTP ${res.status}`;
+    } catch {
+      message = text.trim() || `HTTP ${res.status}`;
+    }
+    throw new Error(message);
   }
   return res.json() as Promise<SyncResponse>;
+}
+
+async function requestUploadUrls(
+  apiEndpoint: string,
+  accessToken: string,
+  lexiconSlug: string,
+  fileList: Array<{ path: string; contentType?: string }>,
+): Promise<SyncResponse> {
+  if (fileList.length <= SYNC_CHUNK_SIZE) {
+    return requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList);
+  }
+
+  const combined: SyncResponse = { uploadUrls: [], existing: {} };
+  for (let i = 0; i < fileList.length; i += SYNC_CHUNK_SIZE) {
+    const chunk = fileList.slice(i, i + SYNC_CHUNK_SIZE);
+    const result = await requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, chunk);
+    combined.uploadUrls.push(...result.uploadUrls);
+    Object.assign(combined.existing, result.existing);
+  }
+  return combined;
 }
 
 export const syncCommand = new Command("sync")
@@ -138,7 +167,7 @@ Examples:
     const absDir = path.resolve(dir);
     if (!fs.existsSync(absDir)) {
       console.error(chalk.red(`Directory not found: ${absDir}`));
-      process.exit(1);
+      process.exitCode = 1; return;
     }
 
     const apiEndpoint = config.get("apiEndpoint");
@@ -146,11 +175,11 @@ Examples:
 
     if (!apiEndpoint) {
       console.error(chalk.red("Not configured. Run `pensieve config init`."));
-      process.exit(1);
+      process.exitCode = 1; return;
     }
     if (!accessToken) {
       console.error(chalk.red("Not logged in. Run `pensieve login` first."));
-      process.exit(1);
+      process.exitCode = 1; return;
     }
 
     // ── Scan vault ──────────────────────────────────────────────────────────
@@ -205,12 +234,12 @@ Examples:
         } catch (retryErr: unknown) {
           urlSpinner.fail("Failed to get upload URLs");
           console.error(chalk.red(retryErr instanceof Error ? retryErr.message : String(retryErr)));
-          process.exit(1);
+          process.exitCode = 1; return;
         }
       } else {
         urlSpinner.fail("Failed to get upload URLs");
         console.error(chalk.red(err instanceof Error ? err.message : String(err)));
-        process.exit(1);
+        process.exitCode = 1; return;
       }
     }
     urlSpinner.succeed("Ready to upload");
