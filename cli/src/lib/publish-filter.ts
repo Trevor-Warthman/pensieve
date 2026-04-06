@@ -2,31 +2,66 @@ import * as fs from "fs";
 import * as path from "path";
 import matter from "gray-matter";
 
-interface FolderConfig {
-  publish?: boolean;
+interface DirectoryRule {
+  path: string;
+  publish: boolean;
+}
+
+export interface PensieveConfig {
+  directories?: DirectoryRule[];
 }
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".avif"]);
+const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".weba", ".opus"]);
 const SKIP_DIRS = new Set([".", "..", ".git", ".obsidian", "node_modules"]);
 
-function readFolderConfig(dir: string): FolderConfig {
-  const configPath = path.join(dir, "_folder.yaml");
+export function readPensieveConfig(rootDir: string): PensieveConfig {
+  const configPath = path.join(rootDir, "pensieve.yaml");
   if (!fs.existsSync(configPath)) return {};
   try {
-    const { data } = matter.read(configPath);
-    return data as FolderConfig;
+    const content = fs.readFileSync(configPath, "utf8");
+    const { data } = matter(`---\n${content}\n---\n`);
+    return data as PensieveConfig;
   } catch {
     return {};
   }
 }
 
-function shouldPublishFile(filePath: string, folderDefault: boolean): boolean {
+export function writePensieveConfig(rootDir: string, cfg: PensieveConfig): void {
+  const configPath = path.join(rootDir, "pensieve.yaml");
+  const dirs = cfg.directories ?? [];
+  let content = "directories:\n";
+  if (dirs.length === 0) {
+    content += "  []\n";
+  } else {
+    for (const rule of dirs) {
+      content += `  - path: ${rule.path}\n    publish: ${rule.publish}\n`;
+    }
+  }
+  fs.writeFileSync(configPath, content, "utf8");
+}
+
+/** Find the most specific (longest) directory rule that applies to a given directory path. */
+function resolveDirectoryDefault(dirRelPath: string, rules: DirectoryRule[], globalDefault: boolean): boolean {
+  let best: DirectoryRule | null = null;
+  for (const rule of rules) {
+    const rulePath = rule.path.replace(/\/$/, "");
+    if (dirRelPath === rulePath || dirRelPath.startsWith(rulePath + "/")) {
+      if (!best || rulePath.length > best.path.replace(/\/$/, "").length) {
+        best = rule;
+      }
+    }
+  }
+  return best !== null ? best.publish : globalDefault;
+}
+
+function shouldPublishFile(filePath: string, fileDefault: boolean): boolean {
   try {
     const { data } = matter.read(filePath);
     if (typeof data.publish === "boolean") return data.publish;
-    return folderDefault;
+    return fileDefault;
   } catch {
-    return folderDefault;
+    return fileDefault;
   }
 }
 
@@ -38,13 +73,13 @@ export interface ScanResult {
 export function scanVault(
   rootDir: string,
   currentDir: string = rootDir,
-  parentDefault: boolean = true
+  parentDefault: boolean = true,
+  rules?: DirectoryRule[]
 ): ScanResult {
-  const folderConfig = readFolderConfig(currentDir);
-  const folderDefault =
-    typeof folderConfig.publish === "boolean"
-      ? folderConfig.publish
-      : parentDefault;
+  // Read pensieve.yaml once at root level, then thread it through recursion
+  if (rules === undefined) {
+    rules = readPensieveConfig(rootDir).directories ?? [];
+  }
 
   const mdFiles: string[] = [];
   const assetFiles: string[] = [];
@@ -55,16 +90,18 @@ export function scanVault(
     const fullPath = path.join(currentDir, entry.name);
 
     if (entry.isDirectory()) {
-      const sub = scanVault(rootDir, fullPath, folderDefault);
+      const sub = scanVault(rootDir, fullPath, parentDefault, rules);
       mdFiles.push(...sub.mdFiles);
       assetFiles.push(...sub.assetFiles);
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
-      if (ext === ".md" && entry.name !== "_folder.yaml") {
-        if (shouldPublishFile(fullPath, folderDefault)) {
+      if (ext === ".md") {
+        const dirRelPath = path.relative(rootDir, currentDir).replace(/\\/g, "/");
+        const fileDefault = resolveDirectoryDefault(dirRelPath, rules, parentDefault);
+        if (shouldPublishFile(fullPath, fileDefault)) {
           mdFiles.push(fullPath);
         }
-      } else if (IMAGE_EXTENSIONS.has(ext)) {
+      } else if (IMAGE_EXTENSIONS.has(ext) || AUDIO_EXTENSIONS.has(ext)) {
         assetFiles.push(fullPath);
       }
     }

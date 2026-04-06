@@ -29,6 +29,14 @@ function getContentType(filePath: string): string {
     ".svg": "image/svg+xml",
     ".webp": "image/webp",
     ".avif": "image/avif",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    ".weba": "audio/webm",
+    ".opus": "audio/ogg; codecs=opus",
   };
   return types[ext] ?? "application/octet-stream";
 }
@@ -65,7 +73,7 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
       wikilinkRegex.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = wikilinkRegex.exec(content)) !== null) {
-        const target = match[1].trim().toLowerCase().replace(/\s+/g, "-");
+        const target = match[1].trim().toLowerCase();
         if (!backlinks[target]) backlinks[target] = [];
         if (!backlinks[target].includes(slug)) backlinks[target].push(slug);
       }
