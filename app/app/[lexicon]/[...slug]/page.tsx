@@ -20,7 +20,7 @@ export default async function NotePage({ params }: NotePageProps) {
     buildBacklinksIndex(s3Prefix),
     getAssetMap(s3Prefix),
   ]);
-  const note = await getNote(s3Prefix, decodedSlug, backlinksIndex, assets);
+  const note = await getNote(s3Prefix, decodedSlug, backlinksIndex, assets, lexiconSlug);
   if (!note) notFound();
 
   const showToc = note.headings.filter((h) => h.level <= 3).length >= 3;

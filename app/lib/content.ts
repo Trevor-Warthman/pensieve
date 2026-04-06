@@ -212,7 +212,7 @@ export const buildBacklinksIndex = cache(async (
       wikilinkRegex.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = wikilinkRegex.exec(content)) !== null) {
-        const target = match[1].trim().toLowerCase().replace(/\s+/g, "-");
+        const target = match[1].trim().toLowerCase();
         const existing = index.get(target) ?? [];
         if (!existing.includes(sourceSlug)) { existing.push(sourceSlug); index.set(target, existing); }
       }
@@ -228,7 +228,8 @@ export async function getNote(
   s3Prefix: string,
   slugPath: string[],
   backlinksIndex?: Map<string, string[]>,
-  assets?: Record<string, string>
+  assets?: Record<string, string>,
+  lexiconSlug?: string,
 ): Promise<RenderedNote | null> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const key = `${prefix}${slugPath.join("/")}.md`;
@@ -243,10 +244,30 @@ export async function getNote(
   const { data, content } = matter(raw);
   if (data.publish === false) return null;
 
+  // Build a slug map for resolving wikilinks to absolute paths.
+  // Manifest is already cached, so this costs no extra S3 requests.
+  let noteSlugMap: Map<string, string> | undefined;
+  if (lexiconSlug) {
+    const manifest = await fetchManifest(prefix);
+    if (manifest) {
+      noteSlugMap = new Map();
+      for (const note of manifest.notes) {
+        const lowerSlug = note.slug.toLowerCase();
+        const basename = lowerSlug.split("/").pop()!;
+        // Index by full lowercase slug and by bare basename (for shortest-path lookup).
+        // Full path takes priority; first writer wins for basename collisions.
+        noteSlugMap.set(lowerSlug, note.slug);
+        if (!noteSlugMap.has(basename)) noteSlugMap.set(basename, note.slug);
+      }
+    }
+  }
+
   const { html, headings } = await renderMarkdown(content, {
     cloudfrontUrl: CLOUDFRONT_URL,
     s3Prefix,
     assets,
+    lexiconSlug,
+    noteSlugMap,
   });
 
   const slugStr = slugPath.join("/").toLowerCase();
@@ -321,7 +342,7 @@ export async function buildGraphData(
     wikilinkRegex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = wikilinkRegex.exec(content)) !== null) {
-      const target = match[1].trim().toLowerCase().replace(/\s+/g, "-");
+      const target = match[1].trim().toLowerCase();
       if (!publishedSlugs.has(target) || target === sourceId) continue;
       const key = `${sourceId}→${target}`;
       if (edgeSet.has(key)) continue;
