@@ -4,6 +4,7 @@ import { loginCommand } from "./commands/login";
 import { registerCommand } from "./commands/register";
 import { syncCommand } from "./commands/sync";
 import { configCommand } from "./commands/config";
+import { publishCommand, unpublishCommand } from "./commands/publish";
 
 const program = new Command();
 
@@ -16,6 +17,8 @@ program.addCommand(loginCommand);
 program.addCommand(registerCommand);
 program.addCommand(syncCommand);
 program.addCommand(configCommand);
+program.addCommand(publishCommand);
+program.addCommand(unpublishCommand);
 
 for (const cmd of [loginCommand, registerCommand]) {
   cmd.hook("preAction", async () => {

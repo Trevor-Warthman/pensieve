@@ -12,6 +12,8 @@ interface MarkdownOptions {
   cloudfrontUrl: string;
   s3Prefix: string;
   assets?: Record<string, string>; // lowercase basename → relative path
+  lexiconSlug?: string;
+  noteSlugMap?: Map<string, string>; // lowercase key → canonical full slug path
 }
 
 export interface Heading {
@@ -52,6 +54,7 @@ function makeRehypeHeadingIds(collected: Heading[]) {
 }
 
 const IMAGE_EXTS = /\.(png|jpe?g|gif|svg|webp|avif|mp4|pdf)$/i;
+const AUDIO_EXTS = /\.(mp3|wav|m4a|ogg|flac|aac|weba|opus)$/i;
 
 /** Remark plugin: convert [[Wikilinks]] → <a> and ![[image.ext]] → <img> */
 const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
@@ -76,27 +79,54 @@ const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
         const [target, alias] = inner.split("|");
         const trimmedTarget = target.trim();
 
-        if (bang === "!" && IMAGE_EXTS.test(trimmedTarget)) {
-          // Obsidian image embed: ![[filename.png|width]] or ![[path/to/img.png]]
-          // Resolve bare filenames via asset map (Obsidian shortest-path lookup)
+        if (bang === "!" && (IMAGE_EXTS.test(trimmedTarget) || AUDIO_EXTS.test(trimmedTarget))) {
+          // Obsidian embed: ![[filename.ext]] — resolve via asset map
           const basename = trimmedTarget.split("/").pop()!.toLowerCase();
           const resolvedPath = options.assets?.[basename] ?? trimmedTarget;
           const s3Prefix = options.s3Prefix.endsWith("/")
             ? options.s3Prefix
             : `${options.s3Prefix}/`;
-          const src = `${options.cloudfrontUrl}/${s3Prefix}${resolvedPath.replace(/^\//, "")}`;
+          const cfBase = options.cloudfrontUrl.replace(/\/$/, "");
+          const src = `${cfBase}/${s3Prefix}${resolvedPath.replace(/^\//, "")}`;
 
-          // alias may be a pixel width: ![[img.png|400]]
-          const widthNum = alias && /^\d+$/.test(alias.trim()) ? alias.trim() : null;
-          const altText = widthNum ? basename : (alias?.trim() ?? basename);
-
-          children.push({
-            type: "html",
-            value: `<img src="${src}" alt="${altText}"${widthNum ? ` width="${widthNum}"` : ""} style="max-width:100%" />`,
-          } as never);
+          if (AUDIO_EXTS.test(trimmedTarget)) {
+            children.push({
+              type: "html",
+              value: `<audio src="${src}" controls style="width:100%" />`,
+            } as never);
+          } else {
+            // alias may be a pixel width: ![[img.png|400]]
+            const widthNum = alias && /^\d+$/.test(alias.trim()) ? alias.trim() : null;
+            const altText = widthNum ? basename : (alias?.trim() ?? basename);
+            children.push({
+              type: "html",
+              value: `<img src="${src}" alt="${altText}"${widthNum ? ` width="${widthNum}"` : ""} style="max-width:100%" />`,
+            } as never);
+          }
         } else {
           // Regular wikilink → anchor
-          const href = trimmedTarget.toLowerCase().replace(/\s+/g, "-");
+          // Resolve to an absolute path using the note slug map when available,
+          // so links work correctly regardless of how deeply nested the current page is.
+          let href: string;
+          const { lexiconSlug, noteSlugMap } = options;
+          if (lexiconSlug && noteSlugMap) {
+            const normalizedTarget = trimmedTarget.toLowerCase();
+            const basename = normalizedTarget.split("/").pop()!;
+            const resolved =
+              noteSlugMap.get(normalizedTarget) ?? noteSlugMap.get(basename);
+            if (resolved) {
+              href =
+                "/" +
+                [lexiconSlug, ...resolved.split("/")]
+                  .map((s) => encodeURIComponent(s))
+                  .join("/");
+            } else {
+              // Unknown target — keep relative so broken links are at least navigable
+              href = trimmedTarget.split("/").map((s) => encodeURIComponent(s.trim())).join("/");
+            }
+          } else {
+            href = trimmedTarget.split("/").map((s) => encodeURIComponent(s.trim())).join("/");
+          }
           children.push({
             type: "link",
             url: href,
@@ -195,7 +225,7 @@ const remarkRewriteAssets: Plugin<[MarkdownOptions], Root> = ({ cloudfrontUrl, s
   return (tree) => {
     visit(tree, "image", (node) => {
       if (!node.url.startsWith("http")) {
-        node.url = `${cloudfrontUrl}/${s3Prefix.replace(/\/$/, "")}/${node.url.replace(/^\//, "")}`;
+        node.url = `${cloudfrontUrl.replace(/\/$/, "")}/${s3Prefix.replace(/\/$/, "")}/${node.url.replace(/^\//, "")}`;
       }
     });
   };

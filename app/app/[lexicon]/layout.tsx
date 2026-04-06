@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { createHmac } from "node:crypto";
 import SearchBar from "@/components/SearchBar";
 import SidebarWrapper from "@/components/SidebarWrapper";
 import PageSearch from "@/components/PageSearch";
@@ -13,6 +13,28 @@ import { listNotes } from "@/lib/content";
 interface LexiconLayoutProps {
   children: React.ReactNode;
   params: Promise<{ lexicon: string }>;
+}
+
+/** Verify a lexicon access token without importing jsonwebtoken (not RSC-safe). */
+function verifyLexiconToken(token: string | undefined, slug: string, secret: string): boolean {
+  if (!token) return false;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    const [headerB64, payloadB64, signatureB64] = parts;
+    const expectedSig = createHmac("sha256", secret)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest("base64url");
+    if (expectedSig !== signatureB64) return false;
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString()) as {
+      lexiconSlug?: string;
+      exp?: number;
+    };
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
+    return payload.lexiconSlug === slug;
+  } catch {
+    return false;
+  }
 }
 
 function buildSidebarTree(
@@ -68,13 +90,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
   if (lexicon.passwordHash) {
     const cookieStore = await cookies();
     const token = cookieStore.get(`lex_${slug}`)?.value;
-    let valid = false;
-    if (token) {
-      try {
-        const payload = jwt.verify(token, process.env.JWT_SECRET!) as { lexiconSlug: string };
-        valid = payload.lexiconSlug === slug;
-      } catch { /* invalid token */ }
-    }
+    const valid = verifyLexiconToken(token, slug, process.env.JWT_SECRET!);
     if (!valid) redirect(`/auth/${slug}`);
   }
 
