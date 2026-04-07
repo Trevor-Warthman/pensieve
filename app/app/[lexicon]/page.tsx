@@ -30,7 +30,7 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
           {notes.map((note) => (
             <li key={note.s3Key}>
               <Link
-                href={`/${slug}/${note.slug.join("/")}`}
+                href={`/${slug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`}
                 className="group flex flex-col gap-1 rounded-lg border border-gray-200 dark:border-gray-800 px-5 py-4 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
               >
                 <span className="text-gray-900 dark:text-white font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">

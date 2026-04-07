@@ -101,7 +101,7 @@ export default function SearchClient({ index, lexiconSlug, initialQuery = "" }: 
         {results.map(({ item }) => (
           <li key={item.slug}>
             <a
-              href={`/${lexiconSlug}/${item.slug}`}
+              href={`/${lexiconSlug}/${item.slug.split("/").map((s) => encodeURIComponent(s)).join("/")}`}
               className="block p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
               <div className="font-medium text-gray-900 dark:text-white mb-1">

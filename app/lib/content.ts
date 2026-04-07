@@ -232,13 +232,32 @@ export async function getNote(
   lexiconSlug?: string,
 ): Promise<RenderedNote | null> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
-  const key = `${prefix}${slugPath.join("/")}.md`;
+  let key = `${prefix}${slugPath.join("/")}.md`;
 
   let raw: string;
   try {
     raw = await fetchText(key);
   } catch {
-    return null;
+    // Fallback: the filename may contain URL-unsafe chars (e.g. '?') that were
+    // stripped or mangled by the browser before reaching the server.  Try to
+    // find a manifest entry whose slug, after removing those chars, matches
+    // the requested path.
+    const manifest = await fetchManifest(prefix);
+    if (!manifest) return null;
+
+    const requestedLower = slugPath.join("/").toLowerCase();
+    const safeSlug = (s: string) => s.toLowerCase().replace(/[?#]/g, "");
+    const matched = manifest.notes.find(
+      (n) => safeSlug(n.slug) === safeSlug(requestedLower) || safeSlug(n.slug) === requestedLower
+    );
+    if (!matched) return null;
+
+    key = `${prefix}${matched.slug}.md`;
+    try {
+      raw = await fetchText(key);
+    } catch {
+      return null;
+    }
   }
 
   const { data, content } = matter(raw);

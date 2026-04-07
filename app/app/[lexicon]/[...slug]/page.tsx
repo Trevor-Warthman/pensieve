@@ -36,7 +36,7 @@ export default async function NotePage({ params }: NotePageProps) {
           <span key={i} className="flex items-center gap-1.5">
             <span>/</span>
             <Link
-              href={`/${lexiconSlug}/${decodedSlug.slice(0, i + 1).join("/")}`}
+              href={`/${lexiconSlug}/${decodedSlug.slice(0, i + 1).map((s) => encodeURIComponent(s)).join("/")}`}
               className="hover:text-gray-900 dark:hover:text-gray-300 transition-colors"
             >
               {segment}
@@ -85,7 +85,7 @@ export default async function NotePage({ params }: NotePageProps) {
                 {note.backlinks.map((bl) => (
                   <li key={bl}>
                     <Link
-                      href={`/${lexiconSlug}/${bl}`}
+                      href={`/${lexiconSlug}/${bl.split("/").map((s) => encodeURIComponent(s)).join("/")}`}
                       className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                     >
                       {bl}

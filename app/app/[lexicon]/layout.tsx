@@ -49,7 +49,7 @@ function buildSidebarTree(
   );
 
   for (const note of sorted) {
-    const href = `/${lexiconSlug}/${note.slug.join("/")}`;
+    const href = `/${lexiconSlug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`;
     const item: SidebarItem = { label: note.title, href };
 
     if (note.slug.length === 1) {
@@ -62,7 +62,7 @@ function buildSidebarTree(
       if (!parent) {
         parent = {
           label: folderParts.at(-1)!,
-          href: `/${lexiconSlug}/${folderParts.join("/")}`,
+          href: `/${lexiconSlug}/${folderParts.map((s) => encodeURIComponent(s)).join("/")}`,
           children: [],
         };
         folders.set(folderKey, parent);
@@ -98,7 +98,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
   const sidebarItems = buildSidebarTree(notes, slug);
   const searchNotes = notes.map((n) => ({
     title: n.title,
-    href: `/${slug}/${n.slug.join("/")}`,
+    href: `/${slug}/${n.slug.map((s) => encodeURIComponent(s)).join("/")}`,
   }));
 
   return (

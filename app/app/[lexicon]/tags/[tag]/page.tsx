@@ -39,7 +39,7 @@ export default async function TagPage({ params }: TagPageProps) {
           {filtered.map((note) => (
             <li key={note.s3Key}>
               <Link
-                href={`/${slug}/${note.slug.join("/")}`}
+                href={`/${slug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`}
                 className="group flex flex-col gap-1 rounded-lg border border-gray-800 px-5 py-4 hover:border-gray-600 transition-colors"
               >
                 <span className="text-white font-medium">{note.title}</span>
