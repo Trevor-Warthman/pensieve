@@ -205,6 +205,43 @@ const remarkCallouts: Plugin<[], Root> = () => {
   };
 };
 
+/** Rehype plugin: replace <iframe> embeds with a styled external link card.
+ *  Browsers enforce X-Frame-Options / CSP frame-src from the target site;
+ *  Electron (Obsidian) ignores those headers, so iframes appear to work there
+ *  but fail in a real browser.  We surface the URL as a clickable card instead.
+ */
+function rehypeIframeFallback() {
+  return (tree: unknown) => {
+    visit(tree as never, "element", (node: unknown, index, parent: unknown) => {
+      const el = node as { tagName: string; properties: Record<string, unknown> };
+      if (el.tagName !== "iframe") return;
+      const src = el.properties.src as string | undefined;
+      if (!src) return;
+      let hostname = src;
+      try { hostname = new URL(src).hostname; } catch { /* keep raw */ }
+      const replacement = {
+        type: "element",
+        tagName: "a",
+        properties: {
+          href: src,
+          target: "_blank",
+          rel: "noopener noreferrer",
+          class: "iframe-link-card",
+          style: "display:flex;align-items:center;gap:0.5rem;padding:0.75rem 1rem;border:1px solid #e5e7eb;border-radius:0.5rem;text-decoration:none;color:inherit;font-size:0.875rem;",
+        },
+        children: [
+          { type: "element", tagName: "span", properties: {}, children: [{ type: "text", value: "🔗" }] },
+          { type: "element", tagName: "span", properties: {}, children: [{ type: "text", value: hostname }] },
+        ],
+      };
+      const p = parent as { children: unknown[] } | null;
+      if (p && index !== undefined) {
+        p.children.splice(index as number, 1, replacement);
+      }
+    });
+  };
+}
+
 /** Rehype plugin: add target="_blank" rel="noopener noreferrer" to external links */
 function rehypeExternalLinks() {
   return (tree: unknown) => {
@@ -244,6 +281,7 @@ export async function renderMarkdown(
     .use(remarkRewriteAssets, options)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeRaw)
+    .use(rehypeIframeFallback)
     .use(makeRehypeHeadingIds(headings))
     .use(rehypeExternalLinks)
     .use(rehypeStringify)
