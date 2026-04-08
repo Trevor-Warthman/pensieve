@@ -7,6 +7,17 @@ resource "aws_dynamodb_table" "users" {
     name = "userId"
     type = "S"
   }
+
+  attribute {
+    name = "email"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "byEmail"
+    hash_key        = "email"
+    projection_type = "ALL"
+  }
 }
 
 resource "aws_dynamodb_table" "lexicons" {
