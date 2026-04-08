@@ -13,7 +13,7 @@ Source-agnostic: works with Obsidian, Bear, README wikis, or any folder of `.md`
 Install the CLI globally via npm:
 
 ```bash
-npm install -g @trevor-warthman/pensieve-cli
+npm install -g pensieve-markdown
 ```
 
 ### Requirements
