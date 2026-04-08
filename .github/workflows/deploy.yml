@@ -115,11 +115,23 @@ jobs:
       #
       # Passes the Git SHA as app_image_tag so the ECS task definition is
       # updated to the exact image we are about to push.
+      #
+      # Force-unlock any stale lock left by a cancelled run before applying.
+      # Safe in CI because only one pipeline runs at a time (concurrency group).
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          LOCK_ID=$(aws dynamodb get-item \
+            --table-name pensieve-tfstate-lock \
+            --key '{"LockID":{"S":"pensieve-tfstate-931097097534/pensieve/terraform.tfstate"}}' \
+            --query 'Item.Info.S' --output text 2>/dev/null \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ID',''))" 2>/dev/null || true)
+          if [ -n "$LOCK_ID" ] && [ "$LOCK_ID" != "None" ]; then
+            echo "Stale lock detected ($LOCK_ID) — force-unlocking..."
+            terraform force-unlock -force "$LOCK_ID" || true
+          fi
           terraform apply \
             -auto-approve \
             -input=false \
