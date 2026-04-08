@@ -1,7 +1,8 @@
 # ── Pensieve Production Deploy ─────────────────────────────────────────────────
 #
-# Triggers on every push to main. Builds and pushes the Next.js Docker image to
-# ECR, re-zips Lambda handlers, applies Terraform, and force-redeploys ECS.
+# Triggers on every push to main. Zips Lambda handlers, applies Terraform,
+# then builds and pushes the Next.js Docker image to ECR (after Terraform so
+# NEXT_PUBLIC_* values can be read from outputs), and force-redeploys ECS.
 #
 # Authentication: GitHub OIDC federation — no stored AWS credentials needed.
 # The workflow assumes arn:aws:iam::931097097534:role/pensieve-github-actions
@@ -76,29 +77,7 @@ jobs:
           ECR_URL="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/pensieve-app"
           echo "url=${ECR_URL}" >> "$GITHUB_OUTPUT"
 
-      # ── 5. Build & push Docker image ───────────────────────────────────────
-      #
-      # Tag with the full Git SHA for traceability, and also update `latest`
-      # so that `deploy.sh` (kept as fallback) still works without arguments.
-      - name: Build Docker image
-        env:
-          ECR_URL: ${{ steps.ecr-url.outputs.url }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build \
-            --tag "${ECR_URL}:${IMAGE_TAG}" \
-            --tag "${ECR_URL}:latest" \
-            ./app
-
-      - name: Push Docker image to ECR
-        env:
-          ECR_URL: ${{ steps.ecr-url.outputs.url }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker push "${ECR_URL}:${IMAGE_TAG}"
-          docker push "${ECR_URL}:latest"
-
-      # ── 6. Build Lambda zips ───────────────────────────────────────────────
+      # ── 5. Build Lambda zips ───────────────────────────────────────────────
       #
       # Each Lambda handler is a single bundled .js file in infra/lambda-src/.
       # Terraform references the .zip by filename and uses its SHA256 to decide
@@ -118,13 +97,13 @@ jobs:
           echo "  Zipping cost_report.py → cost_report.zip"
           zip -j cost_report.zip cost_report.py
 
-      # ── 7. Set up Terraform ────────────────────────────────────────────────
+      # ── 6. Set up Terraform ────────────────────────────────────────────────
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.5"
 
-      # ── 8. Terraform init ──────────────────────────────────────────────────
+      # ── 7. Terraform init ──────────────────────────────────────────────────
       #
       # Initialises the S3 backend defined in infra/backend.tf.
       # The AWS credentials configured in step 2 are used automatically.
@@ -132,10 +111,10 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -input=false
 
-      # ── 9. Terraform apply ─────────────────────────────────────────────────
+      # ── 8. Terraform apply ─────────────────────────────────────────────────
       #
       # Passes the Git SHA as app_image_tag so the ECS task definition is
-      # updated to the exact image we just pushed.
+      # updated to the exact image we are about to push.
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
         env:
@@ -145,6 +124,34 @@ jobs:
             -auto-approve \
             -input=false \
             -var="app_image_tag=${IMAGE_TAG}"
+
+      # ── 9. Build & push Docker image ───────────────────────────────────────
+      #
+      # Run after Terraform so we can read api_endpoint and cloudfront_domain
+      # outputs and bake NEXT_PUBLIC_* values into the Next.js bundle at build
+      # time. Tag with the full Git SHA for traceability and also update
+      # `latest` so that deploy.sh (kept as fallback) still works.
+      - name: Build Docker image
+        env:
+          ECR_URL: ${{ steps.ecr-url.outputs.url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          API_URL=$(terraform -chdir="${TF_DIR}" output -raw api_endpoint)
+          CF_URL=https://$(terraform -chdir="${TF_DIR}" output -raw cloudfront_domain)
+          docker build \
+            --build-arg "NEXT_PUBLIC_API_URL=${API_URL}" \
+            --build-arg "NEXT_PUBLIC_CLOUDFRONT_URL=${CF_URL}" \
+            --tag "${ECR_URL}:${IMAGE_TAG}" \
+            --tag "${ECR_URL}:latest" \
+            ./app
+
+      - name: Push Docker image to ECR
+        env:
+          ECR_URL: ${{ steps.ecr-url.outputs.url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push "${ECR_URL}:${IMAGE_TAG}"
+          docker push "${ECR_URL}:latest"
 
       # ── 10. Force ECS redeploy ─────────────────────────────────────────────
       #
