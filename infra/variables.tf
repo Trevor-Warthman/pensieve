@@ -5,7 +5,13 @@ variable "region" {
 }
 
 variable "environment" {
-  description = "Deployment environment"
+  description = "Deployment environment (empty string = prod, no prefix)"
   type        = string
-  default     = "dev"
+  default     = ""
+}
+
+variable "app_image_tag" {
+  description = "ECR image tag to deploy"
+  type        = string
+  default     = "latest"
 }
