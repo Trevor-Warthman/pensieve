@@ -84,6 +84,15 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecr:CreateRepository",
           "ecr:DeleteRepository",
           "ecr:ListImages",
+          "ecr:ListTagsForResource",
+          "ecr:TagResource",
+          "ecr:UntagResource",
+          "ecr:PutLifecyclePolicy",
+          "ecr:GetLifecyclePolicy",
+          "ecr:DeleteLifecyclePolicy",
+          "ecr:PutImageScanningConfiguration",
+          "ecr:DescribeImages",
+          "ecr:BatchDeleteImage",
         ]
         Resource = ["arn:aws:ecr:us-east-1:931097097534:repository/pensieve-app"]
       },
@@ -108,6 +117,7 @@ resource "aws_iam_role_policy" "github_actions" {
           "ecs:ListServices",
           "ecs:TagResource",
           "ecs:UntagResource",
+          "ecs:ListTagsForResource",
         ]
         Resource = ["*"]
       },
@@ -137,6 +147,8 @@ resource "aws_iam_role_policy" "github_actions" {
           "lambda:ListEventSourceMappings",
           "lambda:ListVersionsByFunction",
           "lambda:GetFunctionCodeSigningConfig",
+          "lambda:GetAlias",
+          "lambda:ListAliases",
         ]
         Resource = ["arn:aws:lambda:us-east-1:931097097534:function:pensieve-*"]
       },
@@ -189,6 +201,8 @@ resource "aws_iam_role_policy" "github_actions" {
           "iam:RemoveClientIDFromOpenIDConnectProvider",
           "iam:ListOpenIDConnectProviders",
           "iam:TagOpenIDConnectProvider",
+          "iam:ListInstanceProfilesForRole",
+          "iam:ListRoleTags",
         ]
         Resource = ["*"]
       },
@@ -297,8 +311,12 @@ resource "aws_iam_role_policy" "github_actions" {
           "secretsmanager:ListSecrets",
           "secretsmanager:TagResource",
           "secretsmanager:UntagResource",
+          "secretsmanager:ListSecretVersionIds",
+          "secretsmanager:GetResourcePolicy",
+          "secretsmanager:PutResourcePolicy",
+          "secretsmanager:DeleteResourcePolicy",
         ]
-        Resource = ["arn:aws:secretsmanager:us-east-1:931097097534:secret:pensieve-*"]
+        Resource = ["arn:aws:secretsmanager:us-east-1:931097097534:secret:pensieve*"]
       },
 
       # ── API Gateway ────────────────────────────────────────────────────────
@@ -329,6 +347,9 @@ resource "aws_iam_role_policy" "github_actions" {
           "cognito-idp:ListTagsForResource",
           "cognito-idp:GetUserPoolMfaConfig",
           "cognito-idp:SetUserPoolMfaConfig",
+          "cognito-idp:CreateUserPoolDomain",
+          "cognito-idp:DeleteUserPoolDomain",
+          "cognito-idp:DescribeUserPoolDomain",
         ]
         Resource = ["*"]
       },
@@ -339,12 +360,15 @@ resource "aws_iam_role_policy" "github_actions" {
         Effect = "Allow"
         Action = [
           "ec2:DescribeVpcs",
+          "ec2:DescribeVpcAttribute",
           "ec2:DescribeSubnets",
           "ec2:DescribeSecurityGroups",
           "ec2:DescribeInternetGateways",
           "ec2:DescribeRouteTables",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribePrefixLists",
+          "ec2:DescribeNetworkAcls",
           "ec2:CreateSecurityGroup",
           "ec2:DeleteSecurityGroup",
           "ec2:AuthorizeSecurityGroupIngress",
@@ -383,6 +407,9 @@ resource "aws_iam_role_policy" "github_actions" {
           "logs:ListTagsLogGroup",
           "logs:TagLogGroup",
           "logs:UntagLogGroup",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents",
+          "logs:DescribeLogStreams",
         ]
         Resource = ["*"]
       },
