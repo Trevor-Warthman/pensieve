@@ -1,0 +1,197 @@
+# ── Pensieve Production Deploy ─────────────────────────────────────────────────
+#
+# Triggers on every push to main. Builds and pushes the Next.js Docker image to
+# ECR, re-zips Lambda handlers, applies Terraform, and force-redeploys ECS.
+#
+# Required GitHub Secrets (Settings → Secrets and variables → Actions):
+#
+#   AWS_ACCESS_KEY_ID      — IAM access key for the deploy user
+#   AWS_SECRET_ACCESS_KEY  — IAM secret key for the deploy user
+#   AWS_REGION             — e.g. us-east-1
+#
+# The IAM user needs:
+#   - ecr:GetAuthorizationToken, ecr:BatchCheckLayerAvailability,
+#     ecr:CompleteLayerUpload, ecr:InitiateLayerUpload, ecr:PutImage,
+#     ecr:UploadLayerPart
+#   - ecs:UpdateService, ecs:DescribeServices
+#   - s3:GetObject, s3:PutObject, s3:ListBucket  (on pensieve-tfstate-931097097534)
+#   - dynamodb:GetItem, dynamodb:PutItem, dynamodb:DeleteItem
+#     (on pensieve-tfstate-lock)
+#   - All permissions required by the Terraform resources being managed
+#     (ec2, ecs, iam, lambda, cloudfront, cognito, apigateway, secretsmanager…)
+#
+# S3 backend prereqs — run once before the first pipeline execution:
+#   See infra/backend.tf for the exact AWS CLI commands.
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+# Prevent concurrent deploys — queue rather than cancel so no push is skipped.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  # ECS cluster/service names are hard-coded to match the Terraform locals
+  # (name_prefix = "pensieve" when environment = "").
+  ECS_CLUSTER: pensieve
+  ECS_SERVICE: pensieve-app
+  TF_DIR: infra
+
+jobs:
+  deploy:
+    name: Build → Terraform → ECS
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. AWS credentials ─────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      # ── 3. Log in to ECR ───────────────────────────────────────────────────
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── 4. Derive the ECR repository URL ──────────────────────────────────
+      #
+      # The ECR URL is an output of Terraform, but we need it before we run
+      # Terraform (to tag the image). It follows a predictable pattern:
+      #   <account-id>.dkr.ecr.<region>.amazonaws.com/pensieve-app
+      #
+      # We derive account-id from the credentials rather than hard-coding it.
+      - name: Derive ECR repository URL
+        id: ecr-url
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_URL="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/pensieve-app"
+          echo "url=${ECR_URL}" >> "$GITHUB_OUTPUT"
+
+      # ── 5. Build & push Docker image ───────────────────────────────────────
+      #
+      # Tag with the full Git SHA for traceability, and also update `latest`
+      # so that `deploy.sh` (kept as fallback) still works without arguments.
+      - name: Build Docker image
+        env:
+          ECR_URL: ${{ steps.ecr-url.outputs.url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --tag "${ECR_URL}:${IMAGE_TAG}" \
+            --tag "${ECR_URL}:latest" \
+            ./app
+
+      - name: Push Docker image to ECR
+        env:
+          ECR_URL: ${{ steps.ecr-url.outputs.url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push "${ECR_URL}:${IMAGE_TAG}"
+          docker push "${ECR_URL}:latest"
+
+      # ── 6. Build Lambda zips ───────────────────────────────────────────────
+      #
+      # Each Lambda handler is a single bundled .js file in infra/lambda-src/.
+      # Terraform references the .zip by filename and uses its SHA256 to decide
+      # whether to redeploy, so we always re-zip from the current source.
+      #
+      # Handlers: auth.js, lexicons.js, invalidate.js, sync.js
+      # (cost_report.py is a separate Lambda not managed by the same pattern.)
+      - name: Zip Lambda handlers
+        working-directory: infra/lambda-src
+        run: |
+          for handler in auth lexicons invalidate sync; do
+            echo "  Zipping ${handler}.js → ${handler}.zip"
+            zip -j "${handler}.zip" "${handler}.js"
+          done
+
+          # cost_report is Python — zip it separately
+          echo "  Zipping cost_report.py → cost_report.zip"
+          zip -j cost_report.zip cost_report.py
+
+      # ── 7. Set up Terraform ────────────────────────────────────────────────
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.5"
+
+      # ── 8. Terraform init ──────────────────────────────────────────────────
+      #
+      # Initialises the S3 backend defined in infra/backend.tf.
+      # The AWS credentials configured in step 2 are used automatically.
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init -input=false
+
+      # ── 9. Terraform apply ─────────────────────────────────────────────────
+      #
+      # Passes the Git SHA as app_image_tag so the ECS task definition is
+      # updated to the exact image we just pushed.
+      - name: Terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          terraform apply \
+            -auto-approve \
+            -input=false \
+            -var="app_image_tag=${IMAGE_TAG}"
+
+      # ── 10. Force ECS redeploy ─────────────────────────────────────────────
+      #
+      # Terraform updates the task definition, but force-new-deployment ensures
+      # ECS actually replaces running tasks (not just on the next natural cycle).
+      - name: Force ECS service redeployment
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION" \
+            --output json \
+          | python3 -c "
+          import sys, json
+          s = json.load(sys.stdin)['service']
+          print(f\"  Service : {s['serviceName']}\")
+          print(f\"  Status  : {s['status']}\")
+          print(f\"  Tasks   : {s['runningCount']}/{s['desiredCount']} running\")
+          "
+
+      # ── 11. Wait for service stability ────────────────────────────────────
+      #
+      # Blocks until all desired tasks are RUNNING and pass health checks, or
+      # times out after ~10 minutes (AWS default for services-stable).
+      - name: Wait for ECS service to stabilise
+        run: |
+          echo "Waiting for ${ECS_SERVICE} to stabilise (up to ~10 min)..."
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"
+          echo "ECS service is stable."
+
+      # ── 12. Print deployment summary ───────────────────────────────────────
+      - name: Print ALB URL
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          ALB=$(terraform output -raw alb_dns_name)
+          echo ""
+          echo "Deploy complete"
+          echo "  Image tag : ${{ github.sha }}"
+          echo "  App URL   : http://${ALB}"
+          echo ""
