@@ -1,5 +1,5 @@
 resource "aws_dynamodb_table" "users" {
-  name         = "pensieve-${var.environment}-users"
+  name         = "${local.name_prefix}-users"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "userId"
 
@@ -10,7 +10,7 @@ resource "aws_dynamodb_table" "users" {
 }
 
 resource "aws_dynamodb_table" "lexicons" {
-  name         = "pensieve-${var.environment}-lexicons"
+  name         = "${local.name_prefix}-lexicons"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "lexiconId"
 

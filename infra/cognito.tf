@@ -1,5 +1,5 @@
 resource "aws_cognito_user_pool" "main" {
-  name = "pensieve-${var.environment}-users"
+  name = "${local.name_prefix}-users"
 
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
@@ -22,7 +22,7 @@ resource "aws_cognito_user_pool" "main" {
 }
 
 resource "aws_cognito_user_pool_client" "cli" {
-  name         = "pensieve-${var.environment}-cli"
+  name         = "${local.name_prefix}-cli"
   user_pool_id = aws_cognito_user_pool.main.id
 
   explicit_auth_flows = [

@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "content" {
-  bucket = "pensieve-${var.environment}-content-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-content-${data.aws_caller_identity.current.account_id}"
 }
 
 resource "aws_s3_bucket_versioning" "content" {

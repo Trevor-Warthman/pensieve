@@ -9,7 +9,7 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 }
 
 resource "aws_iam_role" "lambda_exec" {
-  name               = "pensieve-${var.environment}-lambda-exec"
+  name               = "${local.name_prefix}-lambda-exec"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
@@ -19,7 +19,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_iam_role_policy" "lambda_resources" {
-  name = "pensieve-${var.environment}-lambda-resources"
+  name = "${local.name_prefix}-lambda-resources"
   role = aws_iam_role.lambda_exec.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -49,7 +49,7 @@ resource "aws_iam_role_policy" "lambda_resources" {
 }
 
 resource "aws_lambda_function" "auth" {
-  function_name    = "pensieve-${var.environment}-auth"
+  function_name    = "${local.name_prefix}-auth"
   role             = aws_iam_role.lambda_exec.arn
   runtime          = "nodejs20.x"
   handler          = "auth.handler"
@@ -65,7 +65,7 @@ resource "aws_lambda_function" "auth" {
 }
 
 resource "aws_lambda_function" "lexicons" {
-  function_name    = "pensieve-${var.environment}-lexicons"
+  function_name    = "${local.name_prefix}-lexicons"
   role             = aws_iam_role.lambda_exec.arn
   runtime          = "nodejs20.x"
   handler          = "lexicons.handler"
@@ -83,7 +83,7 @@ resource "aws_lambda_function" "lexicons" {
 }
 
 resource "aws_lambda_function" "invalidate" {
-  function_name    = "pensieve-${var.environment}-invalidate"
+  function_name    = "${local.name_prefix}-invalidate"
   role             = aws_iam_role.lambda_exec.arn
   runtime          = "nodejs20.x"
   handler          = "invalidate.handler"
@@ -106,7 +106,7 @@ resource "aws_lambda_permission" "s3_invoke_invalidate" {
 }
 
 resource "aws_lambda_function" "sync" {
-  function_name    = "pensieve-${var.environment}-sync"
+  function_name    = "${local.name_prefix}-sync"
   role             = aws_iam_role.lambda_exec.arn
   runtime          = "nodejs20.x"
   handler          = "sync.handler"

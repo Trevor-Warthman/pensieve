@@ -1,5 +1,5 @@
 resource "aws_cloudfront_origin_access_control" "content" {
-  name                              = "pensieve-${var.environment}-content-oac"
+  name                              = "${local.name_prefix}-content-oac"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -8,7 +8,7 @@ resource "aws_cloudfront_origin_access_control" "content" {
 resource "aws_cloudfront_distribution" "content" {
   enabled             = true
   default_root_object = "index.html"
-  comment             = "Pensieve ${var.environment} content CDN"
+  comment             = "Pensieve ${local.name_prefix} content CDN"
 
   origin {
     domain_name              = aws_s3_bucket.content.bucket_regional_domain_name

@@ -2,9 +2,9 @@
 node_modules/
 
 # Environment variables
-.env.local
-.env*.local
 .env
+.env.*
+!.env.*.example
 
 # Next.js
 app/.next/

@@ -1,5 +1,5 @@
 resource "aws_apigatewayv2_api" "main" {
-  name          = "pensieve-${var.environment}-api"
+  name          = "${local.name_prefix}-api"
   protocol_type = "HTTP"
   cors_configuration {
     allow_origins = ["*"]

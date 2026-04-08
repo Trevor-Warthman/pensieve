@@ -32,3 +32,13 @@ output "dynamodb_lexicons_table" {
   description = "DynamoDB lexicons table name"
   value       = aws_dynamodb_table.lexicons.name
 }
+
+output "ecr_repository_url" {
+  description = "ECR repository URL for the app image"
+  value       = aws_ecr_repository.app.repository_url
+}
+
+output "alb_dns_name" {
+  description = "ALB DNS name — point your domain here"
+  value       = aws_lb.app.dns_name
+}
