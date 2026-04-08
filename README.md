@@ -8,6 +8,69 @@ Source-agnostic: works with Obsidian, Bear, README wikis, or any folder of `.md`
 
 ---
 
+## Installation
+
+Install the CLI globally via npm:
+
+```bash
+npm install -g @trevor-warthman/pensieve-cli
+```
+
+### Requirements
+
+- Node.js 18+
+- A deployed Pensieve instance (see [infra/](infra/) for Terraform setup)
+
+---
+
+## CLI Usage
+
+### First-time setup
+
+Point the CLI at your Pensieve API and configure credentials:
+
+```bash
+# Load all settings automatically from Terraform outputs
+pensieve config init --from-terraform ./infra
+
+# Or set the API endpoint manually
+pensieve config init --api-endpoint https://<api-gateway-id>.execute-api.us-east-1.amazonaws.com
+```
+
+### Authentication
+
+```bash
+pensieve register          # Create a new Pensieve account
+pensieve login             # Log in to your Pensieve account
+pensieve logout            # Clear stored credentials
+```
+
+### Syncing your vault
+
+```bash
+pensieve sync ./notes --lexicon my-blog   # Sync a local directory to a Lexicon
+```
+
+`sync` diffs your local files against what's already in S3 and only uploads changed files. It respects `publish: true/false` frontmatter and `pensieve.yaml` directory rules.
+
+### Managing publish rules
+
+```bash
+pensieve publish notes/public             # Mark a directory as published in pensieve.yaml
+pensieve unpublish notes/drafts           # Mark a directory as unpublished in pensieve.yaml
+```
+
+Changes take effect on the next `pensieve sync`.
+
+### Config management
+
+```bash
+pensieve config show                      # Show the current saved config
+pensieve config init --from-terraform     # Reload config from Terraform outputs
+```
+
+---
+
 ## Concepts
 
 - **Lexicon** — a user's collection of published notes (a blog, a wiki, a DnD campaign site). One user can have many Lexicons.
@@ -93,7 +156,7 @@ pensieve/
 ## Features
 
 ### MVP
-- [ ] Pensieve CLI (`pensieve login`, `pensieve sync`)
+- [x] Pensieve CLI (`pensieve login`, `pensieve sync`)
 - [ ] S3 upload with diffing (only changed files)
 - [ ] User accounts via Cognito
 - [ ] Create / manage Lexicons
