@@ -135,6 +135,8 @@ resource "aws_iam_role_policy" "github_actions" {
           "lambda:DeleteEventSourceMapping",
           "lambda:GetEventSourceMapping",
           "lambda:ListEventSourceMappings",
+          "lambda:ListVersionsByFunction",
+          "lambda:GetFunctionCodeSigningConfig",
         ]
         Resource = ["arn:aws:lambda:us-east-1:931097097534:function:pensieve-*"]
       },
@@ -325,6 +327,8 @@ resource "aws_iam_role_policy" "github_actions" {
           "cognito-idp:TagResource",
           "cognito-idp:UntagResource",
           "cognito-idp:ListTagsForResource",
+          "cognito-idp:GetUserPoolMfaConfig",
+          "cognito-idp:SetUserPoolMfaConfig",
         ]
         Resource = ["*"]
       },
@@ -401,6 +405,47 @@ resource "aws_iam_role_policy" "github_actions" {
           "budgets:DescribeBudget",
           "budgets:ModifyBudget",
           "budgets:ViewBudget",
+          "budgets:ListTagsForResource",
+          "budgets:TagResource",
+          "budgets:UntagResource",
+        ]
+        Resource = ["*"]
+      },
+
+      # ── SES ────────────────────────────────────────────────────────────────
+      {
+        Sid    = "SES"
+        Effect = "Allow"
+        Action = [
+          "ses:GetIdentityVerificationAttributes",
+          "ses:VerifyEmailIdentity",
+          "ses:DeleteIdentity",
+          "ses:ListIdentities",
+          "ses:GetIdentityDkimAttributes",
+          "ses:GetIdentityMailFromDomainAttributes",
+          "ses:GetIdentityNotificationAttributes",
+          "ses:SetIdentityFeedbackForwardingEnabled",
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+        ]
+        Resource = ["*"]
+      },
+
+      # ── EventBridge ────────────────────────────────────────────────────────
+      {
+        Sid    = "EventBridge"
+        Effect = "Allow"
+        Action = [
+          "events:DescribeRule",
+          "events:PutRule",
+          "events:DeleteRule",
+          "events:ListRules",
+          "events:PutTargets",
+          "events:RemoveTargets",
+          "events:ListTargetsByRule",
+          "events:TagResource",
+          "events:UntagResource",
+          "events:ListTagsForResource",
         ]
         Resource = ["*"]
       },
