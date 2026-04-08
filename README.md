@@ -25,16 +25,20 @@ npm install -g pensieve-markdown
 
 ## CLI Usage
 
-### First-time setup
+### Connecting to a Pensieve instance
 
-Point the CLI at your Pensieve API and configure credentials:
+Point the CLI at your Pensieve API endpoint, then register and log in:
 
 ```bash
-# Load all settings automatically from Terraform outputs
-pensieve config init --from-terraform ./infra
+pensieve config init --api-endpoint https://a65q1v78o5.execute-api.us-east-1.amazonaws.com
+pensieve register
+pensieve login
+```
 
-# Or set the API endpoint manually
-pensieve config init --api-endpoint https://<api-gateway-id>.execute-api.us-east-1.amazonaws.com
+If you're running your own instance, substitute your own API Gateway URL. You can also auto-detect it from Terraform outputs:
+
+```bash
+pensieve config init --from-terraform ./infra
 ```
 
 ### Authentication
