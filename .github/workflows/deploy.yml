@@ -24,10 +24,10 @@ on:
     branches:
       - main
 
-# Prevent concurrent deploys — queue rather than cancel so no push is skipped.
+# Cancel any in-progress deploy when a new push arrives.
 concurrency:
   group: production-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   AWS_REGION: us-east-1
