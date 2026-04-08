@@ -182,6 +182,15 @@ Examples:
       process.exitCode = 1; return;
     }
 
+    // ── Verify auth before scanning ──────────────────────────────────────────
+    const authCheck = await fetch(`${apiEndpoint}/users/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => null);
+    if (!authCheck || authCheck.status === 401) {
+      console.error(chalk.red("Not logged in or session expired. Run `pensieve login` first."));
+      process.exitCode = 1; return;
+    }
+
     // ── Scan vault ──────────────────────────────────────────────────────────
     const scanSpinner = ora("Scanning vault...").start();
     const { mdFiles, assetFiles } = scanVault(absDir);
@@ -224,7 +233,8 @@ Examples:
       syncData = await requestUploadUrls(apiEndpoint, accessToken!, opts.lexicon, fileList);
     } catch (err: unknown) {
       if (err instanceof Error && err.message === "UNAUTHORIZED") {
-        urlSpinner.text = "Session expired — re-authenticating...";
+        urlSpinner.stop();
+        console.log(chalk.yellow("Session expired — please log in again."));
         config.delete("accessToken");
         const { runSetupIfNeeded } = await import("../lib/setup-wizard");
         await runSetupIfNeeded();
@@ -238,7 +248,12 @@ Examples:
         }
       } else {
         urlSpinner.fail("Failed to get upload URLs");
-        console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.toLowerCase().includes("fetch failed") || msg.toLowerCase().includes("econnrefused") || msg.toLowerCase().includes("enotfound")) {
+          console.error(chalk.red("Could not reach the Pensieve server. Check your internet connection or run `pensieve config init` to verify your API endpoint."));
+        } else {
+          console.error(chalk.red(msg));
+        }
         process.exitCode = 1; return;
       }
     }

@@ -10,10 +10,12 @@
     "postbuild": "pagefind --site .next/server/app --output-path public/pagefind"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1019.0",
     "@aws-sdk/client-dynamodb": "^3.1019.0",
     "@aws-sdk/client-s3": "^3.1019.0",
     "@aws-sdk/lib-dynamodb": "^3.1019.0",
     "@aws-sdk/s3-request-presigner": "^3.1022.0",
+    "aws-jwt-verify": "^4.0.1",
     "@tailwindcss/typography": "^0.5.19",
     "@types/d3": "^7.4.3",
     "bcryptjs": "^3.0.3",

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import bcrypt from "bcryptjs";
+import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import jwt from "jsonwebtoken";
 
 const isLocal = !!process.env.DYNAMODB_ENDPOINT;
+
+// DynamoDB client — used in both local and prod for profile storage
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({
   region: process.env.AWS_REGION ?? "us-east-1",
   ...(isLocal && {
@@ -13,108 +14,94 @@ const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({
   }),
 }));
 const USERS_TABLE = process.env.DYNAMODB_USERS_TABLE!;
-const JWT_SECRET = process.env.JWT_SECRET!;
 
-function getTokenPayload(req: NextRequest): { sub: string; email: string } | null {
+// Cognito JWT verifier (prod only — imported lazily to avoid errors in local dev)
+async function getCognitoVerifier() {
+  const { CognitoJwtVerifier } = await import("aws-jwt-verify");
+  return CognitoJwtVerifier.create({
+    userPoolId: process.env.COGNITO_USER_POOL_ID!,
+    tokenUse: "access",
+    clientId: process.env.COGNITO_CLIENT_ID!,
+  });
+}
+
+async function getTokenPayload(req: NextRequest): Promise<{ sub: string; email: string } | null> {
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return null;
+  const token = auth.slice(7);
+
+  if (isLocal) {
+    // Local dev: validate custom JWT
+    try {
+      return jwt.verify(token, process.env.JWT_SECRET!) as { sub: string; email: string };
+    } catch {
+      return null;
+    }
+  }
+
+  // Production: validate Cognito access token
   try {
-    return jwt.verify(auth.slice(7), JWT_SECRET) as { sub: string; email: string };
+    const verifier = await getCognitoVerifier();
+    const payload = await verifier.verify(token);
+    // Cognito access tokens have `username` as email and `sub` as the user's UUID
+    return { sub: payload.sub, email: payload.username ?? (payload as Record<string, string>)["cognito:username"] ?? "" };
   } catch {
     return null;
   }
 }
 
 export async function GET(req: NextRequest) {
-  const payload = getTokenPayload(req);
+  const payload = await getTokenPayload(req);
   if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const result = await dynamo.send(new GetCommand({
-    TableName: USERS_TABLE,
-    Key: { userId: payload.sub },
-  }));
-
-  const user = result.Item as { userId: string; email: string; name?: string } | undefined;
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  return NextResponse.json({ email: user.email, name: user.name ?? null });
-}
-
-export async function PATCH(req: NextRequest) {
-  const payload = getTokenPayload(req);
-  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const body = await req.json() as { name?: string; email?: string; currentPassword?: string; newPassword?: string };
-
-  // Password change path
-  if (body.newPassword !== undefined) {
-    if (!body.currentPassword) {
-      return NextResponse.json({ error: "currentPassword required" }, { status: 400 });
-    }
-    if (body.newPassword.length < 8) {
-      return NextResponse.json({ error: "New password must be at least 8 characters" }, { status: 400 });
-    }
-
+  if (isLocal) {
     const result = await dynamo.send(new GetCommand({
       TableName: USERS_TABLE,
       Key: { userId: payload.sub },
     }));
-    const user = result.Item as { passwordHash: string } | undefined;
+    const user = result.Item as { userId: string; email: string; name?: string } | undefined;
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return NextResponse.json({ email: user.email, name: user.name ?? null });
+  }
 
-    const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
-    if (!valid) return NextResponse.json({ error: "Current password is incorrect" }, { status: 400 });
-
-    const passwordHash = await bcrypt.hash(body.newPassword, 10);
-    await dynamo.send(new UpdateCommand({
+  // Production: Cognito is the source of truth for identity.
+  // Return profile data from DynamoDB if it exists, otherwise synthesize from token.
+  try {
+    const result = await dynamo.send(new GetCommand({
       TableName: USERS_TABLE,
       Key: { userId: payload.sub },
-      UpdateExpression: "SET passwordHash = :h",
-      ExpressionAttributeValues: { ":h": passwordHash },
     }));
-
-    return NextResponse.json({ ok: true });
+    const profile = result.Item as { email: string; name?: string } | undefined;
+    return NextResponse.json({
+      email: profile?.email ?? payload.email,
+      name: profile?.name ?? null,
+    });
+  } catch {
+    // DynamoDB unavailable — fall back to token data
+    return NextResponse.json({ email: payload.email, name: null });
   }
+}
 
-  // Profile update path (name and/or email)
-  const updates: string[] = [];
-  const values: Record<string, string> = {};
+export async function PATCH(req: NextRequest) {
+  const payload = await getTokenPayload(req);
+  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (body.name !== undefined) {
-    updates.push("#n = :name");
-    values[":name"] = body.name;
-  }
+  const body = await req.json() as { name?: string };
 
-  let newToken: string | undefined;
-
-  if (body.email !== undefined && body.email !== payload.email) {
-    // Check email not already taken
-    const existing = await dynamo.send(new QueryCommand({
-      TableName: USERS_TABLE,
-      IndexName: "byEmail",
-      KeyConditionExpression: "email = :email",
-      ExpressionAttributeValues: { ":email": body.email },
-      Limit: 1,
-    }));
-    if (existing.Items && existing.Items.length > 0) {
-      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
-    }
-    updates.push("email = :email");
-    values[":email"] = body.email;
-    newToken = jwt.sign({ sub: payload.sub, email: body.email }, JWT_SECRET, { expiresIn: "7d" });
-  }
-
-  if (updates.length === 0) {
+  if (body.name === undefined) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  await dynamo.send(new UpdateCommand({
+  // Store profile data (name, etc.) in DynamoDB alongside Cognito sub as key
+  await dynamo.send(new PutCommand({
     TableName: USERS_TABLE,
-    Key: { userId: payload.sub },
-    UpdateExpression: `SET ${updates.join(", ")}`,
-    ExpressionAttributeNames: body.name !== undefined ? { "#n": "name" } : undefined,
-    ExpressionAttributeValues: values,
+    Item: {
+      userId: payload.sub,
+      email: payload.email,
+      name: body.name,
+      updatedAt: new Date().toISOString(),
+    },
   }));
 
-  return NextResponse.json({ ok: true, ...(newToken && { accessToken: newToken }) });
+  return NextResponse.json({ ok: true });
 }

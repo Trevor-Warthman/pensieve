@@ -49,6 +49,12 @@ resource "aws_apigatewayv2_route" "auth_register" {
   target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
 }
 
+resource "aws_apigatewayv2_route" "auth_confirm" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /auth/confirm"
+  target    = "integrations/${aws_apigatewayv2_integration.auth.id}"
+}
+
 resource "aws_apigatewayv2_route" "lexicons_list" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "GET /lexicons"

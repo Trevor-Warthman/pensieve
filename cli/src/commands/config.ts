@@ -3,6 +3,19 @@ import { execSync } from "child_process";
 import { config } from "../config";
 import chalk from "chalk";
 
+// Known production Cognito client ID — set automatically when a prod API endpoint is configured.
+// This is not a secret (public-facing client, no secret, ALLOW_USER_PASSWORD_AUTH only).
+const PROD_COGNITO_CLIENT_ID = "6dfishamdf578kcamtovkoa3os";
+
+function isLocalhost(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
 export const configCommand = new Command("config")
   .description("Manage CLI configuration");
 
@@ -43,7 +56,14 @@ configCommand
       return;
     }
 
-    if (opts.apiEndpoint) config.set("apiEndpoint", opts.apiEndpoint);
+    if (opts.apiEndpoint) {
+      config.set("apiEndpoint", opts.apiEndpoint);
+      // Auto-populate the Cognito client ID for prod endpoints so `pensieve login` works
+      // without needing to run `--from-terraform` or pass the client ID manually.
+      if (!isLocalhost(opts.apiEndpoint) && !opts.cognitoClientId) {
+        config.set("cognitoClientId", PROD_COGNITO_CLIENT_ID);
+      }
+    }
     if (opts.cognitoPoolId) config.set("cognitoUserPoolId", opts.cognitoPoolId);
     if (opts.cognitoClientId) config.set("cognitoClientId", opts.cognitoClientId);
     if (opts.s3Bucket) config.set("s3Bucket", opts.s3Bucket);
