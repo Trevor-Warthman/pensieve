@@ -1,10 +1,20 @@
-# Secret container — Terraform owns the resource, but NOT the value.
-# To set or rotate the secret:
+# Secret containers — Terraform owns the resources, but NOT the values.
+# To set or rotate:
 #   aws secretsmanager put-secret-value \
 #     --secret-id pensieve/jwt-secret \
 #     --secret-string "$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
 resource "aws_secretsmanager_secret" "jwt_secret" {
   name                    = "${local.name_prefix}/jwt-secret"
+  recovery_window_in_days = 0
+}
+
+# npm publish token — used by the CLI publish workflow.
+# To set:
+#   aws secretsmanager put-secret-value \
+#     --secret-id pensieve/npm-token \
+#     --secret-string "<your-npm-access-token>"
+resource "aws_secretsmanager_secret" "npm_token" {
+  name                    = "${local.name_prefix}/npm-token"
   recovery_window_in_days = 0
 }
 

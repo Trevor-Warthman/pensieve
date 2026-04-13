@@ -1,9 +1,12 @@
 # ── Publish CLI to npm ──────────────────────────────────────────────────────────
 #
-# SETUP REQUIRED: Add an NPM_TOKEN secret to your GitHub repo:
-#   Settings → Secrets and variables → Actions → New repository secret
-#   Name: NPM_TOKEN
-#   Value: an npm access token with publish permission (https://www.npmjs.com/settings/~/tokens)
+# SETUP REQUIRED: Store an npm access token in AWS Secrets Manager:
+#   aws secretsmanager put-secret-value \
+#     --secret-id pensieve/npm-token \
+#     --secret-string "<your-npm-access-token>"
+#
+# The token needs publish permission. Generate one at:
+#   https://www.npmjs.com/settings/~/tokens
 #
 # ────────────────────────────────────────────────────────────────────────────────
 
@@ -24,8 +27,29 @@ defaults:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write   # required for OIDC token exchange
+      contents: read    # required for actions/checkout
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::931097097534:role/pensieve-github-actions
+          aws-region: us-east-1
+
+      - name: Fetch npm token from Secrets Manager
+        id: npm-secret
+        run: |
+          NPM_TOKEN=$(aws secretsmanager get-secret-value \
+            --secret-id pensieve/npm-token \
+            --query SecretString --output text)
+          echo "::add-mask::$NPM_TOKEN"
+          echo "token=$NPM_TOKEN" >> "$GITHUB_OUTPUT"
+        working-directory: .
 
       - uses: actions/setup-node@v4
         with:
@@ -55,4 +79,4 @@ jobs:
         if: steps.version-check.outputs.already_published == 'false'
         run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ steps.npm-secret.outputs.token }}
