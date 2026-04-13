@@ -19,6 +19,7 @@ app/public/pagefind/
 # Test artifacts
 app/test-results/
 app/playwright-report/
+app/audit-shots/
 
 # Terraform
 infra/.terraform/
