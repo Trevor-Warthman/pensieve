@@ -1,0 +1,15 @@
+{
+  "name": "pensieve-markdown",
+  "version": "0.1.1",
+  "description": "CLI tool for syncing local markdown files to Pensieve",
+  "bin": {
+    "pensieve": "./cli/dist/index.js"
+  },
+  "scripts": {
+    "prepare": "cd cli && npm install && npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
