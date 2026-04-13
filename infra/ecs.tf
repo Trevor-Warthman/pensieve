@@ -167,8 +167,8 @@ resource "aws_ecs_task_definition" "app" {
   family                   = "${local.name_prefix}-app"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 512
-  memory                   = 1024
+  cpu                      = 256
+  memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
@@ -226,4 +226,78 @@ resource "aws_ecs_service" "app" {
   }
 
   depends_on = [aws_lb_listener.http]
+
+  # Ignore desired_count changes made by the scheduler
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+}
+
+# ── Scheduled scaling (10am–1am ET) ───────────────────────────────────────────
+
+resource "aws_iam_role" "ecs_scheduler" {
+  name = "${local.name_prefix}-ecs-scheduler"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "scheduler.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_scheduler" {
+  name = "${local.name_prefix}-ecs-scheduler"
+  role = aws_iam_role.ecs_scheduler.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ecs:UpdateService"]
+      Resource = [aws_ecs_service.app.id]
+    }]
+  })
+}
+
+resource "aws_scheduler_schedule" "ecs_start" {
+  name       = "${local.name_prefix}-ecs-start"
+  group_name = "default"
+
+  flexible_time_window { mode = "OFF" }
+
+  # 10:00 AM ET every day
+  schedule_expression          = "cron(0 10 * * ? *)"
+  schedule_expression_timezone = "America/New_York"
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:ecs:updateService"
+    role_arn = aws_iam_role.ecs_scheduler.arn
+    input = jsonencode({
+      Cluster      = aws_ecs_cluster.main.name
+      Service      = aws_ecs_service.app.name
+      DesiredCount = 1
+    })
+  }
+}
+
+resource "aws_scheduler_schedule" "ecs_stop" {
+  name       = "${local.name_prefix}-ecs-stop"
+  group_name = "default"
+
+  flexible_time_window { mode = "OFF" }
+
+  # 1:00 AM ET every day
+  schedule_expression          = "cron(0 1 * * ? *)"
+  schedule_expression_timezone = "America/New_York"
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:ecs:updateService"
+    role_arn = aws_iam_role.ecs_scheduler.arn
+    input = jsonencode({
+      Cluster      = aws_ecs_cluster.main.name
+      Service      = aws_ecs_service.app.name
+      DesiredCount = 0
+    })
+  }
 }

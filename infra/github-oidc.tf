@@ -476,6 +476,23 @@ resource "aws_iam_role_policy" "github_actions" {
         ]
         Resource = ["*"]
       },
+
+      # ── EventBridge Scheduler ──────────────────────────────────────────────
+      {
+        Sid    = "Scheduler"
+        Effect = "Allow"
+        Action = [
+          "scheduler:CreateSchedule",
+          "scheduler:DeleteSchedule",
+          "scheduler:GetSchedule",
+          "scheduler:UpdateSchedule",
+          "scheduler:ListSchedules",
+          "scheduler:TagResource",
+          "scheduler:UntagResource",
+          "scheduler:ListTagsForResource",
+        ]
+        Resource = ["*"]
+      },
     ]
   })
 }
