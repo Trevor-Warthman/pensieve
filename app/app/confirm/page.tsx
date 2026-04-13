@@ -1,47 +1,35 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function RegisterPage() {
+export default function ConfirmPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password !== confirm) {
-      setError("Passwords do not match");
-      return;
-    }
     setError(null);
     setLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, code }),
       });
 
-      const body = await res.json() as { accessToken?: string; message?: string; error?: string };
+      const body = await res.json() as { message?: string; error?: string };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
 
-      if (body.accessToken) {
-        localStorage.setItem("pensieve_token", body.accessToken);
-        localStorage.setItem("pensieve_email", email);
-        document.cookie = `pensieve_token=${body.accessToken}; path=/; SameSite=Strict`;
-        router.push("/dashboard");
-      } else {
-        router.push(`/confirm?email=${encodeURIComponent(email)}`);
-      }
+      router.push("/login");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(err instanceof Error ? err.message : "Confirmation failed");
     } finally {
       setLoading(false);
     }
@@ -53,9 +41,12 @@ export default function RegisterPage() {
         <ThemeToggle />
       </div>
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-8 text-center">
-          Create an account
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+          Verify your email
         </h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 text-center">
+          Enter the confirmation code sent to your email.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
@@ -72,45 +63,32 @@ export default function RegisterPage() {
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="password" className="text-sm text-gray-500 dark:text-gray-400">Password</label>
+            <label htmlFor="code" className="text-sm text-gray-500 dark:text-gray-400">Confirmation code</label>
             <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              id="code"
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
               required
-              autoComplete="new-password"
-              className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label htmlFor="confirm" className="text-sm text-gray-500 dark:text-gray-400">Confirm password</label>
-            <input
-              id="confirm"
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-              autoComplete="new-password"
+              autoComplete="one-time-code"
+              inputMode="numeric"
               className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
             />
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
-          {success && <p className="text-sm text-green-600 dark:text-green-400">{success}</p>}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {loading ? "Creating account…" : "Create account"}
+            {loading ? "Verifying…" : "Verify email"}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-          Already have an account?{" "}
+          Already verified?{" "}
           <Link href="/login" className="text-gray-900 dark:text-white hover:underline">
             Sign in
           </Link>
