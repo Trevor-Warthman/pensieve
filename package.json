@@ -6,7 +6,7 @@
     "pensieve": "./cli/dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p cli/tsconfig.json && chmod +x cli/dist/index.js",
+    "build": "./node_modules/.bin/tsc -p cli/tsconfig.json && chmod +x cli/dist/index.js",
     "prepare": "npm run build"
   },
   "dependencies": {
