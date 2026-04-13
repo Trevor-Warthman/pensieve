@@ -10,8 +10,8 @@ node_modules/
 app/.next/
 app/tsconfig.tsbuildinfo
 
-# CLI build output
-cli/dist/
+# CLI build output is committed so `npm install -g` from GitHub works
+# without a build step. Rebuild with: cd cli && npm run build
 
 # Pagefind (generated search index, rebuilt at deploy)
 app/public/pagefind/
