@@ -8,16 +8,6 @@ resource "aws_secretsmanager_secret" "jwt_secret" {
   recovery_window_in_days = 0
 }
 
-# npm publish token — used by the CLI publish workflow.
-# To set:
-#   aws secretsmanager put-secret-value \
-#     --secret-id pensieve/npm-token \
-#     --secret-string "<your-npm-access-token>"
-resource "aws_secretsmanager_secret" "npm_token" {
-  name                    = "${local.name_prefix}/npm-token"
-  recovery_window_in_days = 0
-}
-
 # Allow ECS execution role to read secrets at task startup
 resource "aws_iam_role_policy" "ecs_secrets" {
   name = "${local.name_prefix}-ecs-secrets"

@@ -10,10 +10,10 @@ Source-agnostic: works with Obsidian, Bear, README wikis, or any folder of `.md`
 
 ## Installation
 
-Install the CLI globally via npm:
+Install the CLI globally from GitHub:
 
 ```bash
-npm install -g pensieve-markdown
+npm install -g Trevor-Warthman/pensieve
 ```
 
 ### Requirements
