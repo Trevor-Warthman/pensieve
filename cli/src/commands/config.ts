@@ -27,13 +27,20 @@ configCommand
   .option("--cognito-client-id <id>", "Cognito User Pool Client ID (production only)")
   .option("--s3-bucket <bucket>", "S3 content bucket name (production only)")
   .option("--from-terraform [dir]", "Read all values from `terraform output -json` (optional path to infra dir, defaults to cwd)")
-  .action((opts: {
+  .action(async (opts: {
     apiEndpoint?: string;
     cognitoPoolId?: string;
     cognitoClientId?: string;
     s3Bucket?: string;
     fromTerraform?: string | boolean;
   }) => {
+    const hasFlags = opts.apiEndpoint || opts.cognitoPoolId || opts.cognitoClientId || opts.s3Bucket || opts.fromTerraform !== undefined;
+    if (!hasFlags) {
+      const { configureEndpoint } = await import("../lib/setup-wizard");
+      await configureEndpoint();
+      return;
+    }
+
     if (opts.fromTerraform !== undefined) {
       const dir = typeof opts.fromTerraform === "string" ? opts.fromTerraform : process.cwd();
       let output: Record<string, { value: string }>;

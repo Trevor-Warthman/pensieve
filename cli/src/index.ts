@@ -41,4 +41,15 @@ program
     console.log("Logged out.");
   });
 
+// Kick off the update check before parse so it runs in the background while
+// the command executes, then print any warning once the command completes.
+const updateCheckPromise = import("./lib/update-check").then(({ checkForUpdate }) =>
+  checkForUpdate().catch(() => null)
+);
+
+program.hook("postAction", async () => {
+  const warning = await updateCheckPromise;
+  if (warning) console.log(warning);
+});
+
 program.parse(process.argv);

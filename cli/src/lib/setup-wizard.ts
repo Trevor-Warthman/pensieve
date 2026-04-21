@@ -16,7 +16,7 @@ function isLocalhost(url: string): boolean {
   }
 }
 
-async function configureEndpoint(): Promise<void> {
+export async function configureEndpoint(): Promise<void> {
   const mode = await select({
     message: "Are you connecting to a local dev server or production?",
     choices: [

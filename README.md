@@ -10,22 +10,34 @@ Source-agnostic: works with Obsidian, Bear, README wikis, or any folder of `.md`
 
 ## Installation
 
-Install the CLI globally:
-
-```bash
-npx pensieve-markdown
-```
-
-Or install permanently:
-
 ```bash
 npm install -g Trevor-Warthman/pensieve
 ```
+
+To update to the latest version, run the same command again.
 
 ### Requirements
 
 - Node.js 18+
 - A deployed Pensieve instance (see [infra/](infra/) for Terraform setup)
+
+---
+
+## CLI Development
+
+The CLI source lives in [`cli/src/`](cli/src/). The compiled output in `cli/dist/` is committed to the repo so users can install directly from GitHub without a build step.
+
+**When the pipeline rebuilds dist:** Any push to `main` that touches `cli/src/`, `cli/package*.json`, or `cli/tsconfig.json` triggers the [Build CLI](.github/workflows/build-cli.yml) workflow, which compiles the TypeScript and commits the updated `cli/dist/` back to `main` automatically.
+
+**To make a CLI change:**
+1. Edit files in `cli/src/`
+2. Push to `main` — the pipeline handles the rest
+3. Users run `npm install -g Trevor-Warthman/pensieve` to get the update
+
+**To test locally before pushing:**
+```bash
+cd cli && npm run build && npm install -g .
+```
 
 ---
 

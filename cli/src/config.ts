@@ -9,6 +9,9 @@ interface PensieveConfig {
   refreshToken?: string;
   userId?: string;
   email?: string;
+  // Update-check cache
+  updateCheckCachedVersion?: string;
+  updateCheckCachedAt?: string; // Unix timestamp (ms) as string
 }
 
 const conf = new Conf<PensieveConfig>({ projectName: "pensieve" });
