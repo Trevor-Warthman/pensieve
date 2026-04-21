@@ -1,5 +1,4 @@
-import { select, input, password, confirm } from "@inquirer/prompts";
-import { execSync } from "child_process";
+import { select, input, password } from "@inquirer/prompts";
 import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
@@ -35,38 +34,9 @@ export async function configureEndpoint(): Promise<void> {
     return;
   }
 
-  const fromTf = await confirm({
-    message: "Read config from `terraform output -json`?",
-    default: true,
-  });
-
-  if (fromTf) {
-    const dir = await input({
-      message: "Path to infra directory:",
-      default: "./infra",
-    });
-    try {
-      const json = execSync("terraform output -json", { cwd: dir, encoding: "utf8" });
-      const output = JSON.parse(json) as Record<string, { value: string }>;
-      const get = (key: string) => output[key]?.value;
-      if (get("api_endpoint")) config.set("apiEndpoint", get("api_endpoint"));
-      if (get("cognito_user_pool_id")) config.set("cognitoUserPoolId", get("cognito_user_pool_id"));
-      if (get("cognito_client_id")) config.set("cognitoClientId", get("cognito_client_id"));
-      if (get("s3_bucket_name")) config.set("s3Bucket", get("s3_bucket_name"));
-      console.log(chalk.green("Config loaded from Terraform."));
-    } catch (err) {
-      console.error(chalk.red(`terraform output failed: ${err instanceof Error ? err.message : String(err)}`));
-      process.exit(1);
-    }
-    return;
-  }
-
-  const url = await input({ message: "API endpoint URL:" });
-  const poolId = await input({ message: "Cognito User Pool ID:" });
-  const clientId = await input({ message: "Cognito User Pool Client ID:" });
-  config.set("apiEndpoint", url);
-  config.set("cognitoUserPoolId", poolId);
-  config.set("cognitoClientId", clientId);
+  config.set("apiEndpoint", "https://a65q1v78o5.execute-api.us-east-1.amazonaws.com");
+  config.set("cognitoUserPoolId", "us-east-1_ojOnZYerx");
+  config.set("cognitoClientId", "6dfishamdf578kcamtovkoa3os");
   console.log(chalk.green("Config saved."));
 }
 
