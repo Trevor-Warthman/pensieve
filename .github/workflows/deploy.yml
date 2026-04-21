@@ -111,10 +111,48 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -input=false
 
-      # ── 8. Terraform apply ─────────────────────────────────────────────────
+      # ── 8. Read Terraform outputs (no apply) ───────────────────────────────
       #
-      # Passes the Git SHA as app_image_tag so the ECS task definition is
-      # updated to the exact image we are about to push.
+      # api_endpoint and cloudfront_domain are already in state from the
+      # previous apply — read them now so the Docker build can bake
+      # NEXT_PUBLIC_* values in before we run terraform apply.
+      - name: Read Terraform outputs
+        id: tf-outputs
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          echo "api_url=$(terraform output -raw api_endpoint)" >> "$GITHUB_OUTPUT"
+          echo "cf_url=https://$(terraform output -raw cloudfront_domain)" >> "$GITHUB_OUTPUT"
+
+      # ── 9. Build & push Docker image ───────────────────────────────────────
+      #
+      # Image is pushed BEFORE terraform apply so the task definition always
+      # points to an image that already exists in ECR. If this step fails,
+      # Terraform never updates the task definition, so the previous image
+      # keeps running.
+      - name: Build Docker image
+        env:
+          ECR_URL: ${{ steps.ecr-url.outputs.url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg "NEXT_PUBLIC_API_URL=${{ steps.tf-outputs.outputs.api_url }}" \
+            --build-arg "NEXT_PUBLIC_CLOUDFRONT_URL=${{ steps.tf-outputs.outputs.cf_url }}" \
+            --tag "${ECR_URL}:${IMAGE_TAG}" \
+            --tag "${ECR_URL}:latest" \
+            ./app
+
+      - name: Push Docker image to ECR
+        env:
+          ECR_URL: ${{ steps.ecr-url.outputs.url }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push "${ECR_URL}:${IMAGE_TAG}"
+          docker push "${ECR_URL}:latest"
+
+      # ── 10. Terraform apply ────────────────────────────────────────────────
+      #
+      # Runs after the image is in ECR. Passes the Git SHA as app_image_tag
+      # so the ECS task definition is updated to the exact image just pushed.
       #
       # Force-unlock any stale lock left by a cancelled run before applying.
       # Safe in CI because only one pipeline runs at a time (concurrency group).
@@ -137,35 +175,7 @@ jobs:
             -input=false \
             -var="app_image_tag=${IMAGE_TAG}"
 
-      # ── 9. Build & push Docker image ───────────────────────────────────────
-      #
-      # Run after Terraform so we can read api_endpoint and cloudfront_domain
-      # outputs and bake NEXT_PUBLIC_* values into the Next.js bundle at build
-      # time. Tag with the full Git SHA for traceability and also update
-      # `latest` so that deploy.sh (kept as fallback) still works.
-      - name: Build Docker image
-        env:
-          ECR_URL: ${{ steps.ecr-url.outputs.url }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          API_URL=$(terraform -chdir="${TF_DIR}" output -raw api_endpoint)
-          CF_URL=https://$(terraform -chdir="${TF_DIR}" output -raw cloudfront_domain)
-          docker build \
-            --build-arg "NEXT_PUBLIC_API_URL=${API_URL}" \
-            --build-arg "NEXT_PUBLIC_CLOUDFRONT_URL=${CF_URL}" \
-            --tag "${ECR_URL}:${IMAGE_TAG}" \
-            --tag "${ECR_URL}:latest" \
-            ./app
-
-      - name: Push Docker image to ECR
-        env:
-          ECR_URL: ${{ steps.ecr-url.outputs.url }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker push "${ECR_URL}:${IMAGE_TAG}"
-          docker push "${ECR_URL}:latest"
-
-      # ── 10. Force ECS redeploy ─────────────────────────────────────────────
+      # ── 12. Force ECS redeploy ─────────────────────────────────────────────
       #
       # Terraform updates the task definition, but force-new-deployment ensures
       # ECS actually replaces running tasks (not just on the next natural cycle).
@@ -185,7 +195,7 @@ jobs:
           print(f\"  Tasks   : {s['runningCount']}/{s['desiredCount']} running\")
           "
 
-      # ── 11. Wait for service stability ────────────────────────────────────
+      # ── 13. Wait for service stability ────────────────────────────────────
       #
       # Blocks until all desired tasks are RUNNING and pass health checks, or
       # times out after ~10 minutes (AWS default for services-stable).
@@ -198,7 +208,7 @@ jobs:
             --region "$AWS_REGION"
           echo "ECS service is stable."
 
-      # ── 12. Print deployment summary ───────────────────────────────────────
+      # ── 14. Print deployment summary ───────────────────────────────────────
       - name: Print ALB URL
         working-directory: ${{ env.TF_DIR }}
         run: |
