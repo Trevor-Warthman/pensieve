@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function ConfirmPage() {
+function ConfirmForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
@@ -36,6 +36,49 @@ export default function ConfirmPage() {
   }
 
   return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1">
+        <label htmlFor="email" className="text-sm text-gray-500 dark:text-gray-400">Email</label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label htmlFor="code" className="text-sm text-gray-500 dark:text-gray-400">Confirmation code</label>
+        <input
+          id="code"
+          type="text"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          required
+          autoComplete="one-time-code"
+          inputMode="numeric"
+          className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+        />
+      </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+      >
+        {loading ? "Verifying…" : "Verify email"}
+      </button>
+    </form>
+  );
+}
+
+export default function ConfirmPage() {
+  return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
@@ -48,44 +91,9 @@ export default function ConfirmPage() {
           Enter the confirmation code sent to your email.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label htmlFor="email" className="text-sm text-gray-500 dark:text-gray-400">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label htmlFor="code" className="text-sm text-gray-500 dark:text-gray-400">Confirmation code</label>
-            <input
-              id="code"
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-              autoComplete="one-time-code"
-              inputMode="numeric"
-              className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            {loading ? "Verifying…" : "Verify email"}
-          </button>
-        </form>
+        <Suspense>
+          <ConfirmForm />
+        </Suspense>
 
         <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           Already verified?{" "}
