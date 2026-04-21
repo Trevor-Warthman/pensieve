@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.configureEndpoint = configureEndpoint;
 exports.runSetupIfNeeded = runSetupIfNeeded;
 const prompts_1 = require("@inquirer/prompts");
-const child_process_1 = require("child_process");
 const client_cognito_identity_provider_1 = require("@aws-sdk/client-cognito-identity-provider");
 const chalk_1 = __importDefault(require("chalk"));
 const config_1 = require("../config");
@@ -36,41 +35,9 @@ async function configureEndpoint() {
         console.log(chalk_1.default.green("API endpoint saved."));
         return;
     }
-    const fromTf = await (0, prompts_1.confirm)({
-        message: "Read config from `terraform output -json`?",
-        default: true,
-    });
-    if (fromTf) {
-        const dir = await (0, prompts_1.input)({
-            message: "Path to infra directory:",
-            default: "./infra",
-        });
-        try {
-            const json = (0, child_process_1.execSync)("terraform output -json", { cwd: dir, encoding: "utf8" });
-            const output = JSON.parse(json);
-            const get = (key) => output[key]?.value;
-            if (get("api_endpoint"))
-                config_1.config.set("apiEndpoint", get("api_endpoint"));
-            if (get("cognito_user_pool_id"))
-                config_1.config.set("cognitoUserPoolId", get("cognito_user_pool_id"));
-            if (get("cognito_client_id"))
-                config_1.config.set("cognitoClientId", get("cognito_client_id"));
-            if (get("s3_bucket_name"))
-                config_1.config.set("s3Bucket", get("s3_bucket_name"));
-            console.log(chalk_1.default.green("Config loaded from Terraform."));
-        }
-        catch (err) {
-            console.error(chalk_1.default.red(`terraform output failed: ${err instanceof Error ? err.message : String(err)}`));
-            process.exit(1);
-        }
-        return;
-    }
-    const url = await (0, prompts_1.input)({ message: "API endpoint URL:" });
-    const poolId = await (0, prompts_1.input)({ message: "Cognito User Pool ID:" });
-    const clientId = await (0, prompts_1.input)({ message: "Cognito User Pool Client ID:" });
-    config_1.config.set("apiEndpoint", url);
-    config_1.config.set("cognitoUserPoolId", poolId);
-    config_1.config.set("cognitoClientId", clientId);
+    config_1.config.set("apiEndpoint", "https://a65q1v78o5.execute-api.us-east-1.amazonaws.com");
+    config_1.config.set("cognitoUserPoolId", "us-east-1_ojOnZYerx");
+    config_1.config.set("cognitoClientId", "6dfishamdf578kcamtovkoa3os");
     console.log(chalk_1.default.green("Config saved."));
 }
 async function authenticate() {
