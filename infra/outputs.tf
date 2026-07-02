@@ -39,6 +39,11 @@ output "ecr_repository_url" {
 }
 
 output "alb_dns_name" {
-  description = "ALB DNS name — point your domain here"
+  description = "ALB DNS name — point your domain here (legacy ECS stack, being decommissioned)"
   value       = aws_lb.app.dns_name
+}
+
+output "app_url" {
+  description = "CloudFront domain for the OpenNext app (new Lambda-hosted stack)"
+  value       = "https://${aws_cloudfront_distribution.app.domain_name}"
 }
