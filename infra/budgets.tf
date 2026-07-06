@@ -27,3 +27,29 @@ resource "aws_budgets_budget" "monthly" {
     subscriber_email_addresses = [var.billing_alert_email]
   }
 }
+
+# Covers Jarvis (Lightsail) + Pensieve combined — catches the case where each
+# piece is under its own threshold but the total still creeps up.
+resource "aws_budgets_budget" "total" {
+  name         = "total-monthly-spend"
+  budget_type  = "COST"
+  limit_amount = "30"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 30
+    threshold_type             = "ABSOLUTE_VALUE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.billing_alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 30
+    threshold_type             = "ABSOLUTE_VALUE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.billing_alert_email]
+  }
+}
