@@ -1,7 +1,6 @@
-# ── OpenNext server (Lambda + Function URL + CloudFront) ──────────────────────
-# Additive only — the existing ECS/ALB stack (ecs.tf, ecr.tf) stays live until
-# this is validated. See infra/opennext.tf rollout notes / second-brain chunks
-# tagged #pensieve #opennext for the full migration plan.
+# ── OpenNext server (Lambda + API Gateway + CloudFront) ────────────────────────
+# See second-brain chunks tagged #pensieve #opennext for the full migration
+# plan and the Lambda-Function-URL-behind-OAC dead end this replaced.
 
 # ── IAM ────────────────────────────────────────────────────────────────────────
 
@@ -82,29 +81,44 @@ data "aws_secretsmanager_secret_version" "jwt_secret" {
   secret_id = aws_secretsmanager_secret.jwt_secret.id
 }
 
-resource "aws_lambda_function_url" "opennext_server" {
-  function_name      = aws_lambda_function.opennext_server.function_name
-  authorization_type = "AWS_IAM"
-  invoke_mode        = "BUFFERED"
+# Public HTTP API, no IAM auth on this hop — same pattern as the existing
+# auth/lexicons/sync API (apigateway.tf). A Lambda Function URL behind
+# CloudFront OAC was tried first; CloudFront's OAC doesn't correctly compute
+# the SigV4 body-hash for POST/PUT, so every mutation (register/login/sync)
+# 403'd with InvalidSignatureException before the handler ever ran — a
+# documented CloudFront limitation, not fixable from our side. API Gateway
+# sidesteps it by not requiring request signing on this hop at all; app-level
+# auth (Cognito JWTs) is the real security boundary either way.
+resource "aws_apigatewayv2_api" "opennext_server" {
+  name          = "${local.name_prefix}-opennext-server"
+  protocol_type = "HTTP"
 }
 
-resource "aws_lambda_permission" "cloudfront_invoke_opennext" {
-  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
-  action        = "lambda:InvokeFunctionUrl"
-  function_name = aws_lambda_function.opennext_server.function_name
-  principal     = "cloudfront.amazonaws.com"
-  source_arn    = aws_cloudfront_distribution.app.arn
+resource "aws_apigatewayv2_stage" "opennext_server" {
+  api_id      = aws_apigatewayv2_api.opennext_server.id
+  name        = "$default"
+  auto_deploy = true
 }
 
-# AWS added this as a second required permission (alongside InvokeFunctionUrl)
-# for CloudFront OAC -> Lambda Function URL origins; without it CloudFront gets
-# a 403 from the function URL before the handler ever runs.
-resource "aws_lambda_permission" "cloudfront_invoke_opennext_function" {
-  statement_id  = "AllowCloudFrontInvokeFunction"
+resource "aws_apigatewayv2_integration" "opennext_server" {
+  api_id                 = aws_apigatewayv2_api.opennext_server.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.opennext_server.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "opennext_server" {
+  api_id    = aws_apigatewayv2_api.opennext_server.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.opennext_server.id}"
+}
+
+resource "aws_lambda_permission" "apigw_invoke_opennext" {
+  statement_id  = "AllowAPIGateway"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.opennext_server.function_name
-  principal     = "cloudfront.amazonaws.com"
-  source_arn    = aws_cloudfront_distribution.app.arn
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.opennext_server.execution_arn}/*/*"
 }
 
 # ── Static assets bucket ───────────────────────────────────────────────────────
@@ -149,40 +163,6 @@ resource "aws_s3_bucket_policy" "app_assets" {
   })
 }
 
-# ── Lambda Function URL origin access control ─────────────────────────────────
-
-resource "aws_cloudfront_origin_access_control" "opennext_server" {
-  name                              = "${local.name_prefix}-opennext-server-oac"
-  origin_access_control_origin_type = "lambda"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
-# CachingDisabled equivalent, but with Authorization in the header allowlist —
-# required for CloudFront's OAC-generated SigV4 signature to reach a Lambda
-# Function URL origin (empty header list on the managed policy drops it).
-resource "aws_cloudfront_cache_policy" "opennext_server" {
-  name        = "${local.name_prefix}-opennext-server-cache"
-  min_ttl     = 0
-  default_ttl = 0
-  max_ttl     = 1
-
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config {
-      cookie_behavior = "none"
-    }
-    headers_config {
-      header_behavior = "whitelist"
-      headers {
-        items = ["Authorization"]
-      }
-    }
-    query_strings_config {
-      query_string_behavior = "none"
-    }
-  }
-}
-
 # ── CloudFront distribution ────────────────────────────────────────────────────
 # Separate from aws_cloudfront_distribution.content (existing content CDN).
 # Default behavior -> Lambda Function URL (server, uncached).
@@ -191,11 +171,11 @@ resource "aws_cloudfront_cache_policy" "opennext_server" {
 resource "aws_cloudfront_distribution" "app" {
   enabled = true
   comment = "Pensieve ${local.name_prefix} app (OpenNext)"
+  aliases = ["pensieve.click", "www.pensieve.click"]
 
   origin {
-    domain_name              = replace(replace(aws_lambda_function_url.opennext_server.function_url, "https://", ""), "/", "")
-    origin_id                = "opennext-server"
-    origin_access_control_id = aws_cloudfront_origin_access_control.opennext_server.id
+    domain_name = replace(replace(aws_apigatewayv2_stage.opennext_server.invoke_url, "https://", ""), "/", "")
+    origin_id   = "opennext-server"
 
     custom_origin_config {
       http_port              = 80
@@ -218,7 +198,7 @@ resource "aws_cloudfront_distribution" "app" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
-    cache_policy_id          = aws_cloudfront_cache_policy.opennext_server.id
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled managed policy
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader managed policy
   }
 
@@ -249,6 +229,8 @@ resource "aws_cloudfront_distribution" "app" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.pensieve_click.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 }
