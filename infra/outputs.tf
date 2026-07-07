@@ -33,16 +33,6 @@ output "dynamodb_lexicons_table" {
   value       = aws_dynamodb_table.lexicons.name
 }
 
-output "ecr_repository_url" {
-  description = "ECR repository URL for the app image"
-  value       = aws_ecr_repository.app.repository_url
-}
-
-output "alb_dns_name" {
-  description = "ALB DNS name — point your domain here (legacy ECS stack, being decommissioned)"
-  value       = aws_lb.app.dns_name
-}
-
 output "app_url" {
   description = "CloudFront domain for the OpenNext app (new Lambda-hosted stack)"
   value       = "https://${aws_cloudfront_distribution.app.domain_name}"

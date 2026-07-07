@@ -6,7 +6,12 @@ const config: OpenNextConfig = {
   default: {
     override: {
       wrapper: "aws-lambda", // buffered response, matches Function URL RESPONSE_TYPE=BUFFERED
-      converter: "aws-cloudfront",
+      // Invoked as a plain Lambda Function URL (CloudFront is just an HTTP
+      // client to it, not Lambda@Edge/CloudFront Functions), so the event
+      // payload is API Gateway v2 format, not the CloudFront/Lambda@Edge
+      // envelope — "aws-cloudfront" converter expects Records[0].cf.request
+      // and throws on this event shape.
+      converter: "aws-apigw-v2",
     },
   },
   middleware: {

@@ -96,6 +96,17 @@ resource "aws_lambda_permission" "cloudfront_invoke_opennext" {
   source_arn    = aws_cloudfront_distribution.app.arn
 }
 
+# AWS added this as a second required permission (alongside InvokeFunctionUrl)
+# for CloudFront OAC -> Lambda Function URL origins; without it CloudFront gets
+# a 403 from the function URL before the handler ever runs.
+resource "aws_lambda_permission" "cloudfront_invoke_opennext_function" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.opennext_server.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.app.arn
+}
+
 # ── Static assets bucket ───────────────────────────────────────────────────────
 # Dedicated bucket, separate from aws_s3_bucket.content — different lifecycle,
 # and reusing content would spuriously trigger its invalidate Lambda.
@@ -147,6 +158,31 @@ resource "aws_cloudfront_origin_access_control" "opennext_server" {
   signing_protocol                  = "sigv4"
 }
 
+# CachingDisabled equivalent, but with Authorization in the header allowlist —
+# required for CloudFront's OAC-generated SigV4 signature to reach a Lambda
+# Function URL origin (empty header list on the managed policy drops it).
+resource "aws_cloudfront_cache_policy" "opennext_server" {
+  name        = "${local.name_prefix}-opennext-server-cache"
+  min_ttl     = 0
+  default_ttl = 0
+  max_ttl     = 1
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config {
+      cookie_behavior = "none"
+    }
+    headers_config {
+      header_behavior = "whitelist"
+      headers {
+        items = ["Authorization"]
+      }
+    }
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+  }
+}
+
 # ── CloudFront distribution ────────────────────────────────────────────────────
 # Separate from aws_cloudfront_distribution.content (existing content CDN).
 # Default behavior -> Lambda Function URL (server, uncached).
@@ -182,7 +218,7 @@ resource "aws_cloudfront_distribution" "app" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
-    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled managed policy
+    cache_policy_id          = aws_cloudfront_cache_policy.opennext_server.id
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader managed policy
   }
 
