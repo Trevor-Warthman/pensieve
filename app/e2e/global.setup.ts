@@ -76,6 +76,20 @@ publish: false
 This note should not appear in the published list.
 `,
   },
+  {
+    path: "guides/setup.md",
+    content: `---
+title: Setup Guide
+publish: true
+tags: [guide]
+---
+
+# Setup Guide
+
+A note nested under a "guides" folder, used to exercise the sidebar's
+folder-expand behavior (folders have no page of their own).
+`,
+  },
 ];
 
 async function ensureBucket() {
