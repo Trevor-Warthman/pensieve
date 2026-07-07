@@ -99,7 +99,14 @@ function buildManifest(mdFiles, assetFiles, absDir) {
             const { data, content } = gray_matter_1.default.read(file);
             const title = data.title ?? slug.split("/").pop() ?? "Untitled";
             const tags = Array.isArray(data.tags) ? data.tags : [];
-            notes.push({ slug, title, tags, content: stripMarkdown(content).slice(0, 500) });
+            const pin = data.pin === true;
+            const pinOrder = typeof data.pinOrder === "number" ? data.pinOrder : undefined;
+            notes.push({
+                slug, title, tags,
+                content: stripMarkdown(content).slice(0, 500),
+                ...(pin && { pin }),
+                ...(pinOrder !== undefined && { pinOrder }),
+            });
             parsed.push({ slug, content });
         }
         catch {
