@@ -229,6 +229,34 @@ LIST FROM #guide
 \`\`\`
 `,
   },
+  {
+    path: "pinned-second.md",
+    content: `---
+title: Pinned Second
+publish: true
+pin: true
+pinOrder: 2
+---
+
+# Pinned Second
+
+Should render after "Pinned First" in the Pinned section.
+`,
+  },
+  {
+    path: "pinned-first.md",
+    content: `---
+title: Pinned First
+publish: true
+pin: true
+pinOrder: 1
+---
+
+# Pinned First
+
+Should render first in the Pinned section.
+`,
+  },
 ];
 
 /** docker-compose's minio-setup service applies a public-download bucket
