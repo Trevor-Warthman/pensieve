@@ -112,6 +112,10 @@ resource "aws_lambda_function" "sync" {
   handler          = "sync.handler"
   filename         = "${path.module}/lambda-src/sync.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda-src/sync.zip")
+  # Defaults (3s/128MB) time out generating presigned URLs for a real vault
+  # (e.g. 858 notes + 442 assets) -- discovered syncing Winking Skeever.
+  timeout     = 30
+  memory_size = 256
 
   environment {
     variables = {
