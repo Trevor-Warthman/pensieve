@@ -6,6 +6,8 @@ import chalk from "chalk";
 // Known production Cognito client ID — set automatically when a prod API endpoint is configured.
 // This is not a secret (public-facing client, no secret, ALLOW_USER_PASSWORD_AUTH only).
 const PROD_COGNITO_CLIENT_ID = "6dfishamdf578kcamtovkoa3os";
+// Hosted UI domain for the same client, used by the PKCE browser login flow.
+const PROD_COGNITO_DOMAIN = "pensieve-auth.auth.us-east-1.amazoncognito.com";
 
 function isLocalhost(url: string): boolean {
   try {
@@ -25,16 +27,18 @@ configCommand
   .option("--api-endpoint <url>", "API endpoint URL (e.g. http://localhost:3000/api for local dev, or API Gateway URL for prod)")
   .option("--cognito-pool-id <id>", "Cognito User Pool ID (production only)")
   .option("--cognito-client-id <id>", "Cognito User Pool Client ID (production only)")
+  .option("--cognito-domain <domain>", "Cognito Hosted UI domain, for PKCE browser login (production only)")
   .option("--s3-bucket <bucket>", "S3 content bucket name (production only)")
   .option("--from-terraform [dir]", "Read all values from `terraform output -json` (optional path to infra dir, defaults to cwd)")
   .action(async (opts: {
     apiEndpoint?: string;
     cognitoPoolId?: string;
     cognitoClientId?: string;
+    cognitoDomain?: string;
     s3Bucket?: string;
     fromTerraform?: string | boolean;
   }) => {
-    const hasFlags = opts.apiEndpoint || opts.cognitoPoolId || opts.cognitoClientId || opts.s3Bucket || opts.fromTerraform !== undefined;
+    const hasFlags = opts.apiEndpoint || opts.cognitoPoolId || opts.cognitoClientId || opts.cognitoDomain || opts.s3Bucket || opts.fromTerraform !== undefined;
     if (!hasFlags) {
       const { configureEndpoint } = await import("../lib/setup-wizard");
       await configureEndpoint();
@@ -56,6 +60,7 @@ configCommand
       if (get("api_endpoint")) config.set("apiEndpoint", get("api_endpoint"));
       if (get("cognito_user_pool_id")) config.set("cognitoUserPoolId", get("cognito_user_pool_id"));
       if (get("cognito_client_id")) config.set("cognitoClientId", get("cognito_client_id"));
+      if (get("cognito_domain")) config.set("cognitoDomain", get("cognito_domain"));
       if (get("s3_bucket_name")) config.set("s3Bucket", get("s3_bucket_name"));
 
       console.log(chalk.green("Config loaded from Terraform outputs:"));
@@ -70,9 +75,13 @@ configCommand
       if (!isLocalhost(opts.apiEndpoint) && !opts.cognitoClientId) {
         config.set("cognitoClientId", PROD_COGNITO_CLIENT_ID);
       }
+      if (!isLocalhost(opts.apiEndpoint) && !opts.cognitoDomain) {
+        config.set("cognitoDomain", PROD_COGNITO_DOMAIN);
+      }
     }
     if (opts.cognitoPoolId) config.set("cognitoUserPoolId", opts.cognitoPoolId);
     if (opts.cognitoClientId) config.set("cognitoClientId", opts.cognitoClientId);
+    if (opts.cognitoDomain) config.set("cognitoDomain", opts.cognitoDomain);
     if (opts.s3Bucket) config.set("s3Bucket", opts.s3Bucket);
     console.log(chalk.green("Config saved:"));
     console.log(config.getAll());

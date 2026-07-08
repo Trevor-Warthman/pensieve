@@ -1,11 +1,16 @@
+import { createServer } from "http";
+import { randomBytes, createHash } from "crypto";
 import { Command } from "commander";
 import { input, password } from "@inquirer/prompts";
-import {
-  CognitoIdentityProviderClient,
-  InitiateAuthCommand,
-} from "@aws-sdk/client-cognito-identity-provider";
+import open from "open";
 import { config } from "../config";
 import chalk from "chalk";
+
+// Fixed loopback port — must match the callback_urls entry on the Cognito
+// app client (infra/cognito.tf). Cognito requires a static, pre-registered
+// redirect URI, so this can't be a random ephemeral port.
+const CALLBACK_PORT = 53127;
+const REDIRECT_URI = `http://127.0.0.1:${CALLBACK_PORT}/callback`;
 
 function isLocalhost(url: string): boolean {
   try {
@@ -16,22 +21,138 @@ function isLocalhost(url: string): boolean {
   }
 }
 
+function decodeJwtClaims(token: string): Record<string, unknown> {
+  try {
+    return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+  } catch {
+    return {};
+  }
+}
+
 function storeTokens(accessToken: string, email: string, refreshToken?: string) {
   config.set("accessToken", accessToken);
   if (refreshToken) config.set("refreshToken", refreshToken);
   config.set("email", email);
-  try {
-    const payload = JSON.parse(Buffer.from(accessToken.split(".")[1], "base64url").toString());
-    if (payload.sub) config.set("userId", payload.sub);
-  } catch {
-    // non-fatal
+  const payload = decodeJwtClaims(accessToken);
+  if (payload.sub) config.set("userId", payload.sub as string);
+}
+
+function base64url(buf: Buffer): string {
+  return buf.toString("base64url");
+}
+
+/**
+ * Waits for the Cognito Hosted UI redirect on the loopback callback server
+ * and resolves with the authorization code, or rejects on error/state
+ * mismatch/timeout.
+ */
+function waitForAuthCode(expectedState: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", REDIRECT_URI);
+      if (url.pathname !== "/callback") {
+        res.writeHead(404).end();
+        return;
+      }
+
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const error = url.searchParams.get("error");
+
+      res.writeHead(200, { "Content-Type": "text/html" });
+      if (error || !code || state !== expectedState) {
+        res.end(`<html><body>Login failed (${error ?? "invalid response"}). You can close this tab.</body></html>`);
+        server.close();
+        reject(new Error(error ?? "Invalid or missing authorization code/state"));
+        return;
+      }
+
+      res.end("<html><body>Logged in — you can close this tab and return to the terminal.</body></html>");
+      server.close();
+      resolve(code);
+    });
+
+    server.on("error", reject);
+
+    const timeout = setTimeout(() => {
+      server.close();
+      reject(new Error("Timed out waiting for browser login (5 min)"));
+    }, 5 * 60 * 1000);
+    server.on("close", () => clearTimeout(timeout));
+
+    server.listen(CALLBACK_PORT, "127.0.0.1");
+  });
+}
+
+async function loginWithBrowser(): Promise<void> {
+  const clientId = config.get("cognitoClientId");
+  const domain = config.get("cognitoDomain");
+
+  if (!clientId || !domain) {
+    console.log(
+      chalk.yellow(
+        "Pensieve is not configured yet. Run `pensieve config init` once infrastructure is deployed."
+      )
+    );
+    return;
   }
+
+  const verifier = base64url(randomBytes(32));
+  const challenge = base64url(createHash("sha256").update(verifier).digest());
+  const state = base64url(randomBytes(16));
+
+  const authorizeUrl = new URL(`https://${domain}/oauth2/authorize`);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("client_id", clientId);
+  authorizeUrl.searchParams.set("redirect_uri", REDIRECT_URI);
+  authorizeUrl.searchParams.set("scope", "openid email profile");
+  authorizeUrl.searchParams.set("code_challenge", challenge);
+  authorizeUrl.searchParams.set("code_challenge_method", "S256");
+  authorizeUrl.searchParams.set("state", state);
+
+  console.log(chalk.cyan("Opening browser to log in..."));
+  console.log(chalk.dim(`If it doesn't open automatically, visit:\n${authorizeUrl.toString()}`));
+
+  const codePromise = waitForAuthCode(state);
+  await open(authorizeUrl.toString());
+  const code = await codePromise;
+
+  const tokenRes = await fetch(`https://${domain}/oauth2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: verifier,
+    }),
+  });
+
+  const body = (await tokenRes.json()) as {
+    access_token?: string;
+    id_token?: string;
+    refresh_token?: string;
+    error?: string;
+    error_description?: string;
+  };
+
+  if (!tokenRes.ok || !body.access_token) {
+    throw new Error(body.error_description ?? body.error ?? `HTTP ${tokenRes.status}`);
+  }
+
+  const claims = body.id_token ? decodeJwtClaims(body.id_token) : {};
+  const email = typeof claims.email === "string" ? claims.email : "unknown";
+
+  storeTokens(body.access_token, email, body.refresh_token);
+  console.log(chalk.green(`Logged in as ${email}`));
 }
 
 export const loginCommand = new Command("login")
   .description("Authenticate with Pensieve")
   .option("--local", "Use local dev server instead of Cognito (localhost only, not for production use)")
-  .action(async (opts: { local?: boolean }) => {
+  .option("--password", "Use direct Cognito username/password instead of browser login (no TTY needed by Hosted UI, but needs one here)")
+  .action(async (opts: { local?: boolean; password?: boolean }) => {
     const apiEndpoint = config.get("apiEndpoint");
     const clientId = config.get("cognitoClientId");
 
@@ -50,7 +171,7 @@ export const loginCommand = new Command("login")
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password: pass }),
         });
-        const body = await res.json() as { accessToken?: string; error?: string };
+        const body = (await res.json()) as { accessToken?: string; error?: string };
         if (!res.ok || !body.accessToken) throw new Error(body.error ?? `HTTP ${res.status}`);
         storeTokens(body.accessToken, email);
         console.log(chalk.green(`Logged in as ${email}`));
@@ -61,33 +182,45 @@ export const loginCommand = new Command("login")
       return;
     }
 
-    if (!clientId) {
-      console.log(
-        chalk.yellow(
-          "Pensieve is not configured yet. Run `pensieve config init` once infrastructure is deployed."
-        )
+    if (opts.password) {
+      if (!clientId) {
+        console.log(
+          chalk.yellow(
+            "Pensieve is not configured yet. Run `pensieve config init` once infrastructure is deployed."
+          )
+        );
+        return;
+      }
+
+      const { CognitoIdentityProviderClient, InitiateAuthCommand } = await import(
+        "@aws-sdk/client-cognito-identity-provider"
       );
+      const email = await input({ message: "Email:" });
+      const pass = await password({ message: "Password:" });
+      const client = new CognitoIdentityProviderClient({ region: "us-east-1" });
+
+      try {
+        const response = await client.send(
+          new InitiateAuthCommand({
+            AuthFlow: "USER_PASSWORD_AUTH",
+            ClientId: clientId,
+            AuthParameters: { USERNAME: email, PASSWORD: pass },
+          })
+        );
+
+        const tokens = response.AuthenticationResult;
+        if (!tokens?.AccessToken) throw new Error("No tokens returned");
+        storeTokens(tokens.AccessToken, email, tokens.RefreshToken ?? undefined);
+        console.log(chalk.green(`Logged in as ${email}`));
+      } catch (err: unknown) {
+        console.error(chalk.red(`Login failed: ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
       return;
     }
 
-    const email = await input({ message: "Email:" });
-    const pass = await password({ message: "Password:" });
-
-    const client = new CognitoIdentityProviderClient({ region: "us-east-1" });
-
     try {
-      const response = await client.send(
-        new InitiateAuthCommand({
-          AuthFlow: "USER_PASSWORD_AUTH",
-          ClientId: clientId,
-          AuthParameters: { USERNAME: email, PASSWORD: pass },
-        })
-      );
-
-      const tokens = response.AuthenticationResult;
-      if (!tokens?.AccessToken) throw new Error("No tokens returned");
-      storeTokens(tokens.AccessToken, email, tokens.RefreshToken ?? undefined);
-      console.log(chalk.green(`Logged in as ${email}`));
+      await loginWithBrowser();
     } catch (err: unknown) {
       console.error(chalk.red(`Login failed: ${err instanceof Error ? err.message : String(err)}`));
       process.exit(1);

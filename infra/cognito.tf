@@ -30,5 +30,18 @@ resource "aws_cognito_user_pool_client" "cli" {
     "ALLOW_REFRESH_TOKEN_AUTH",
   ]
 
+  # PKCE browser login for headless/agent use — no client secret, no password
+  # ever touches the CLI process.
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  callback_urls                        = ["http://127.0.0.1:53127/callback"]
+  supported_identity_providers         = ["COGNITO"]
+
   generate_secret = false
+}
+
+resource "aws_cognito_user_pool_domain" "main" {
+  domain       = "${local.name_prefix}-auth"
+  user_pool_id = aws_cognito_user_pool.main.id
 }

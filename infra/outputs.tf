@@ -23,6 +23,11 @@ output "cognito_client_id" {
   value       = aws_cognito_user_pool_client.cli.id
 }
 
+output "cognito_domain" {
+  description = "Cognito Hosted UI domain (for PKCE browser login)"
+  value       = "${aws_cognito_user_pool_domain.main.domain}.auth.us-east-1.amazoncognito.com"
+}
+
 output "dynamodb_users_table" {
   description = "DynamoDB users table name"
   value       = aws_dynamodb_table.users.name

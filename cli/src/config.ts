@@ -4,6 +4,7 @@ interface PensieveConfig {
   apiEndpoint?: string;
   cognitoUserPoolId?: string;
   cognitoClientId?: string;
+  cognitoDomain?: string;
   s3Bucket?: string;
   accessToken?: string;
   refreshToken?: string;
