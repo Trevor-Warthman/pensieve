@@ -36,6 +36,13 @@ resource "aws_apigatewayv2_integration" "sync" {
   payload_format_version = "2.0"
 }
 
+resource "aws_apigatewayv2_integration" "device" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.device.invoke_arn
+  payload_format_version = "2.0"
+}
+
 # Routes
 resource "aws_apigatewayv2_route" "auth_login" {
   api_id    = aws_apigatewayv2_api.main.id
@@ -79,6 +86,24 @@ resource "aws_apigatewayv2_route" "sync" {
   target    = "integrations/${aws_apigatewayv2_integration.sync.id}"
 }
 
+resource "aws_apigatewayv2_route" "device_code" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /device/code"
+  target    = "integrations/${aws_apigatewayv2_integration.device.id}"
+}
+
+resource "aws_apigatewayv2_route" "device_verify" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /device/verify"
+  target    = "integrations/${aws_apigatewayv2_integration.device.id}"
+}
+
+resource "aws_apigatewayv2_route" "device_token" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /device/token"
+  target    = "integrations/${aws_apigatewayv2_integration.device.id}"
+}
+
 # Lambda permissions for API Gateway
 resource "aws_lambda_permission" "auth" {
   statement_id  = "AllowAPIGateway"
@@ -100,6 +125,14 @@ resource "aws_lambda_permission" "sync" {
   statement_id  = "AllowAPIGateway"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.sync.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "device" {
+  statement_id  = "AllowAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.device.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
 }

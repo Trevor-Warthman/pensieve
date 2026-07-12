@@ -1,9 +1,4 @@
 import { Command } from "commander";
-import { input, password } from "@inquirer/prompts";
-import {
-  CognitoIdentityProviderClient,
-  InitiateAuthCommand,
-} from "@aws-sdk/client-cognito-identity-provider";
 import { config } from "../config";
 import chalk from "chalk";
 
@@ -28,40 +23,16 @@ function storeTokens(accessToken: string, email: string, refreshToken?: string) 
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export const loginCommand = new Command("login")
   .description("Authenticate with Pensieve")
-  .option("--local", "Use local dev server instead of Cognito (localhost only, not for production use)")
-  .action(async (opts: { local?: boolean }) => {
+  .action(async () => {
     const apiEndpoint = config.get("apiEndpoint");
-    const clientId = config.get("cognitoClientId");
 
-    if (opts.local) {
-      if (!apiEndpoint || !isLocalhost(apiEndpoint)) {
-        console.error(chalk.red("--local requires apiEndpoint to be a localhost URL. This flag is for local development only."));
-        process.exit(1);
-      }
-
-      const email = await input({ message: "Email:" });
-      const pass = await password({ message: "Password:" });
-
-      try {
-        const res = await fetch(`${apiEndpoint}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password: pass }),
-        });
-        const body = await res.json() as { accessToken?: string; error?: string };
-        if (!res.ok || !body.accessToken) throw new Error(body.error ?? `HTTP ${res.status}`);
-        storeTokens(body.accessToken, email);
-        console.log(chalk.green(`Logged in as ${email}`));
-      } catch (err: unknown) {
-        console.error(chalk.red(`Login failed: ${err instanceof Error ? err.message : String(err)}`));
-        process.exit(1);
-      }
-      return;
-    }
-
-    if (!clientId) {
+    if (!apiEndpoint) {
       console.log(
         chalk.yellow(
           "Pensieve is not configured yet. Run `pensieve config init` once infrastructure is deployed."
@@ -70,26 +41,68 @@ export const loginCommand = new Command("login")
       return;
     }
 
-    const email = await input({ message: "Email:" });
-    const pass = await password({ message: "Password:" });
-
-    const client = new CognitoIdentityProviderClient({ region: "us-east-1" });
-
-    try {
-      const response = await client.send(
-        new InitiateAuthCommand({
-          AuthFlow: "USER_PASSWORD_AUTH",
-          ClientId: clientId,
-          AuthParameters: { USERNAME: email, PASSWORD: pass },
-        })
-      );
-
-      const tokens = response.AuthenticationResult;
-      if (!tokens?.AccessToken) throw new Error("No tokens returned");
-      storeTokens(tokens.AccessToken, email, tokens.RefreshToken ?? undefined);
-      console.log(chalk.green(`Logged in as ${email}`));
-    } catch (err: unknown) {
-      console.error(chalk.red(`Login failed: ${err instanceof Error ? err.message : String(err)}`));
+    const startRes = await fetch(`${apiEndpoint}/device/code`, { method: "POST" });
+    if (!startRes.ok) {
+      console.error(chalk.red(`Login failed: could not start device login (HTTP ${startRes.status})`));
       process.exit(1);
     }
+
+    const start = await startRes.json() as {
+      deviceCode: string;
+      userCode: string;
+      verificationUri: string;
+      verificationUriComplete: string;
+      expiresIn: number;
+      interval: number;
+    };
+
+    console.log();
+    if (isLocalhost(apiEndpoint)) {
+      const port = new URL(start.verificationUri).port || "80";
+      console.log(chalk.yellow("apiEndpoint is a local dev server — not reachable from another machine directly."));
+      console.log(chalk.yellow(`If you're opening this link from a different device, tunnel first:`));
+      console.log(chalk.cyan(`  ssh -L ${port}:localhost:${port} <this-host>`));
+      console.log();
+    }
+    console.log(chalk.bold(`Open: ${chalk.cyan(start.verificationUri)}`));
+    console.log(`Enter code: ${chalk.bold.yellow(start.userCode)}\n`);
+
+    // Best-effort: pop a browser if one exists. Never block or fail on this —
+    // must work identically on a headless box (link/code still printed above).
+    try {
+      const open = (await import("open")).default;
+      await open(start.verificationUriComplete);
+    } catch {
+      // no browser available, ignore
+    }
+
+    const deadline = Date.now() + start.expiresIn * 1000;
+    while (Date.now() < deadline) {
+      await sleep(start.interval * 1000);
+
+      const pollRes = await fetch(`${apiEndpoint}/device/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceCode: start.deviceCode }),
+      });
+      const pollBody = await pollRes.json() as {
+        accessToken?: string;
+        refreshToken?: string;
+        email?: string;
+        error?: string;
+      };
+
+      if (pollRes.ok && pollBody.accessToken && pollBody.email) {
+        storeTokens(pollBody.accessToken, pollBody.email, pollBody.refreshToken);
+        console.log(chalk.green(`Logged in as ${pollBody.email}`));
+        return;
+      }
+
+      if (pollBody.error === "authorization_pending") continue;
+      console.error(chalk.red(`Login failed: ${pollBody.error ?? `HTTP ${pollRes.status}`}`));
+      process.exit(1);
+    }
+
+    console.error(chalk.red("Login timed out. Run `pensieve login` again."));
+    process.exit(1);
   });

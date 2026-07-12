@@ -58,4 +58,21 @@ export async function register() {
       },
     ],
   });
+
+  await createTable({
+    TableName: process.env.DYNAMODB_DEVICE_CODES_TABLE ?? "pensieve-dev-device-codes",
+    BillingMode: "PAY_PER_REQUEST",
+    AttributeDefinitions: [
+      { AttributeName: "deviceCode", AttributeType: "S" },
+      { AttributeName: "userCode", AttributeType: "S" },
+    ],
+    KeySchema: [{ AttributeName: "deviceCode", KeyType: "HASH" }],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: "byUserCode",
+        KeySchema: [{ AttributeName: "userCode", KeyType: "HASH" }],
+        Projection: { ProjectionType: "ALL" },
+      },
+    ],
+  });
 }

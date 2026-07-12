@@ -30,9 +30,13 @@ resource "aws_iam_role_policy" "lambda_resources" {
         Resource = [aws_s3_bucket.content.arn, "${aws_s3_bucket.content.arn}/*"]
       },
       {
-        Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"]
-        Resource = [aws_dynamodb_table.users.arn, aws_dynamodb_table.lexicons.arn, "${aws_dynamodb_table.lexicons.arn}/index/*"]
+        Effect = "Allow"
+        Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"]
+        Resource = [
+          aws_dynamodb_table.users.arn,
+          aws_dynamodb_table.lexicons.arn, "${aws_dynamodb_table.lexicons.arn}/index/*",
+          aws_dynamodb_table.device_codes.arn, "${aws_dynamodb_table.device_codes.arn}/index/*",
+        ]
       },
       {
         Effect   = "Allow"
@@ -93,6 +97,22 @@ resource "aws_lambda_function" "invalidate" {
   environment {
     variables = {
       CLOUDFRONT_DISTRIBUTION_ID = aws_cloudfront_distribution.content.id
+    }
+  }
+}
+
+resource "aws_lambda_function" "device" {
+  function_name    = "${local.name_prefix}-device"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "device.handler"
+  filename         = "${path.module}/lambda-src/device.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda-src/device.zip")
+
+  environment {
+    variables = {
+      DYNAMODB_DEVICE_CODES_TABLE = aws_dynamodb_table.device_codes.name
+      APP_URL                     = "https://pensieve.click"
     }
   }
 }
