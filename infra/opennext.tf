@@ -188,6 +188,7 @@ resource "aws_cloudfront_distribution" "app" {
   origin {
     domain_name              = aws_s3_bucket.app_assets.bucket_regional_domain_name
     origin_id                = "app-assets-s3"
+    origin_path              = "/_assets"
     origin_access_control_id = aws_cloudfront_origin_access_control.app_assets.id
   }
 
