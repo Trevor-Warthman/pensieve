@@ -11,10 +11,18 @@ Source-agnostic: works with Obsidian, Bear, README wikis, or any folder of `.md`
 ## Installation
 
 ```bash
-npm install -g Trevor-Warthman/pensieve
+npm install -g pensieve-markdown
 ```
 
-To update to the latest version, run the same command again.
+Published to the npm registry as `pensieve-markdown` (see [Publishing to npm](#publishing-to-npm) below). If you need the bleeding edge before it's been version-bumped and published, `npm install -g Trevor-Warthman/pensieve` installs directly from `main` on GitHub instead — both put the same `pensieve` binary on your `PATH`.
+
+### Updating
+
+```bash
+npm update -g pensieve-markdown
+```
+
+Or just re-run `npm install -g pensieve-markdown` to force the latest. The CLI also checks for updates itself (once per 24h, cached) and prints a nudge when a newer version is available.
 
 ### Requirements
 
@@ -29,15 +37,37 @@ The CLI source lives in [`cli/src/`](cli/src/). The compiled output in `cli/dist
 
 **When the pipeline rebuilds dist:** Any push to `main` that touches `cli/src/`, `cli/package*.json`, or `cli/tsconfig.json` triggers the [Build CLI](.github/workflows/build-cli.yml) workflow, which compiles the TypeScript and commits the updated `cli/dist/` back to `main` automatically.
 
-**To make a CLI change:**
+**To make a CLI change that should ship to users:**
 1. Edit files in `cli/src/`
-2. Push to `main` — the pipeline handles the rest
-3. Users run `npm install -g Trevor-Warthman/pensieve` to get the update
+2. Bump the `"version"` in **both** `cli/package.json` and the repo-root `package.json` (they must stay in sync — the CLI's own update-check reads the root one, npm publishes from the `cli/` one) — see [Publishing to npm](#publishing-to-npm)
+3. Push to `main` — [Build CLI](.github/workflows/build-cli.yml) recompiles `dist/`, [Publish CLI to npm](.github/workflows/publish-cli.yml) ships the new version to the registry
+4. Users get it via `npm update -g pensieve-markdown`, or get nudged automatically by the CLI's own update-check
+
+If you only fix something internal (no user-visible behavior change), you can skip the version bump — `dist/` still gets rebuilt and committed, but nothing gets published (nothing for existing installs to update to, which is correct — there's nothing they need).
 
 **To test locally before pushing:**
 ```bash
 cd cli && npm run build && npm install -g .
 ```
+
+---
+
+## Publishing to npm
+
+The CLI publishes to the npm registry as [`pensieve-markdown`](https://www.npmjs.com/package/pensieve-markdown) via [`.github/workflows/publish-cli.yml`](.github/workflows/publish-cli.yml), triggered on every push to `main`.
+
+**How it decides whether to publish:** it reads the version in `cli/package.json` and checks `npm view pensieve-markdown@<version>` — if that version already exists on the registry, the job is a no-op. If not, it builds and publishes. This means the workflow is safe to run unconditionally on every push; nothing happens unless you actually bumped the version.
+
+**Auth — npm Trusted Publishing (OIDC), no token:**
+Publishing uses npm's [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) — GitHub Actions proves its identity to npm per-run via a short-lived, cryptographically-signed OIDC token. There is no long-lived npm token stored anywhere (the workflow briefly used an `NPM_ACCESS_KEY` repo secret before this was set up; that secret has since been deleted). This is the same OIDC pattern already used for the [AWS deploy role](.github/workflows/deploy.yml) (`pensieve-github-actions`), just with npm as the relying party instead of AWS.
+
+This was a deliberate choice, not just a preference: npm is deprecating token-based publishing that bypasses 2FA — those tokens lose the ability to publish directly around January 2027 ([npm community announcement](https://github.com/orgs/community/discussions/201329)). Trusted Publishing has no such expiry since there's no credential to revoke in the first place.
+
+**One-time setup this required** (already done, documented here so it's not a mystery if it ever needs to be redone — e.g. after transferring npm package ownership):
+1. On [npmjs.com](https://npmjs.com), under the `pensieve-markdown` package's **Settings → Trusted Publisher**: added GitHub Actions as a publisher for `Trevor-Warthman/pensieve`, workflow file `publish-cli.yml`, no environment name, "npm publish" action allowed (not "npm stage publish" — we don't use npm's staged/human-approval publish flow).
+2. In the workflow itself: `permissions: id-token: write` (grants the job an OIDC token) plus an explicit `npm install -g npm@11` step — Trusted Publishing needs npm CLI ≥ 11.5.1, newer than what Node 20's bundled npm ships with. (`npm@latest` is npm 12.x, which requires Node ≥ 22 — pinned to the 11.x line instead of bumping the workflow's Node version.)
+
+**Package identity note:** the repo-root `package.json` and `cli/package.json` share the name `"pensieve-markdown"`, but only `cli/` is ever actually published — root's `package.json` exists solely so `npm install -g Trevor-Warthman/pensieve` (installing straight from the GitHub repo root) resolves dependencies and finds the `bin` entry correctly. Keep both `version` fields in sync when bumping; nothing enforces this automatically.
 
 ---
 
