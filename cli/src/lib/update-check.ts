@@ -6,7 +6,7 @@ import pkg from "../../package.json";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const GITHUB_PKG_URL =
   "https://raw.githubusercontent.com/Trevor-Warthman/pensieve/main/package.json";
-const INSTALL_CMD = "npm install -g Trevor-Warthman/pensieve";
+const INSTALL_CMD = "npm install -g pensieve-markdown";
 
 function getInstalledVersion(): string {
   return pkg.version ?? "0.0.0";
