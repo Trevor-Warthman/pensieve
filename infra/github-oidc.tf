@@ -217,7 +217,7 @@ resource "aws_iam_role_policy" "github_actions" {
           "arn:aws:s3:::pensieve-tfstate-931097097534/*",
         ]
       },
-      # S3 — application content bucket
+      # S3 — application content bucket + OpenNext static assets bucket
       {
         Sid    = "S3Content"
         Effect = "Allow"
@@ -225,6 +225,8 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = [
           "arn:aws:s3:::pensieve-content-931097097534",
           "arn:aws:s3:::pensieve-content-931097097534/*",
+          "arn:aws:s3:::pensieve-app-assets-931097097534",
+          "arn:aws:s3:::pensieve-app-assets-931097097534/*",
         ]
       },
 

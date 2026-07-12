@@ -1,8 +1,8 @@
 # ── Pensieve Production Deploy ─────────────────────────────────────────────────
 #
-# Triggers on every push to main. Zips Lambda handlers, applies Terraform,
-# then builds and pushes the Next.js Docker image to ECR (after Terraform so
-# NEXT_PUBLIC_* values can be read from outputs), and force-redeploys ECS.
+# Triggers on every push to main. Rebuilds Lambda handlers from source, builds
+# the Next.js app via OpenNext (Lambda + S3-hosted static assets, no ECS/Docker),
+# applies Terraform, syncs static assets to S3, and invalidates CloudFront.
 #
 # Authentication: GitHub OIDC federation — no stored AWS credentials needed.
 # The workflow assumes arn:aws:iam::931097097534:role/pensieve-github-actions
@@ -31,15 +31,11 @@ concurrency:
 
 env:
   AWS_REGION: us-east-1
-  # ECS cluster/service names are hard-coded to match the Terraform locals
-  # (name_prefix = "pensieve" when environment = "").
-  ECS_CLUSTER: pensieve
-  ECS_SERVICE: pensieve-app
   TF_DIR: infra
 
 jobs:
   deploy:
-    name: Build → Terraform → ECS
+    name: Build → Terraform → Deploy
     runs-on: ubuntu-latest
 
     permissions:
@@ -51,6 +47,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       # ── 2. AWS credentials (OIDC) ──────────────────────────────────────────
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -58,108 +59,70 @@ jobs:
           role-to-assume: arn:aws:iam::931097097534:role/pensieve-github-actions
           aws-region:     us-east-1
 
-      # ── 3. Log in to ECR ───────────────────────────────────────────────────
-      - name: Log in to Amazon ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # ── 4. Derive the ECR repository URL ──────────────────────────────────
+      # ── 3. Build Lambda handlers from source ───────────────────────────────
       #
-      # The ECR URL is an output of Terraform, but we need it before we run
-      # Terraform (to tag the image). It follows a predictable pattern:
-      #   <account-id>.dkr.ecr.<region>.amazonaws.com/pensieve-app
-      #
-      # We derive account-id from the credentials rather than hard-coding it.
-      - name: Derive ECR repository URL
-        id: ecr-url
+      # Bundles lambda/src/*.ts with esbuild and zips each into
+      # infra/lambda-src/*.zip. (cost_report.py is zipped separately by
+      # Terraform's own archive_file data source — no build step needed here.)
+      - name: Build Lambda handlers
+        working-directory: lambda
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ECR_URL="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/pensieve-app"
-          echo "url=${ECR_URL}" >> "$GITHUB_OUTPUT"
+          npm ci
+          npm run build
 
-      # ── 5. Build Lambda zips ───────────────────────────────────────────────
-      #
-      # Each Lambda handler is a single bundled .js file in infra/lambda-src/.
-      # Terraform references the .zip by filename and uses its SHA256 to decide
-      # whether to redeploy, so we always re-zip from the current source.
-      #
-      # Handlers: auth.js, lexicons.js, invalidate.js, sync.js
-      # (cost_report.py is a separate Lambda not managed by the same pattern.)
-      - name: Zip Lambda handlers
-        working-directory: infra/lambda-src
-        run: |
-          for handler in auth lexicons invalidate sync; do
-            echo "  Zipping ${handler}.js → ${handler}.zip"
-            zip -j "${handler}.zip" "${handler}.js"
-          done
-
-          # cost_report is Python — zip it separately
-          echo "  Zipping cost_report.py → cost_report.zip"
-          zip -j cost_report.zip cost_report.py
-
-      # ── 6. Set up Terraform ────────────────────────────────────────────────
+      # ── 4. Set up Terraform ────────────────────────────────────────────────
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.5"
 
-      # ── 7. Terraform init ──────────────────────────────────────────────────
-      #
-      # Initialises the S3 backend defined in infra/backend.tf.
-      # The AWS credentials configured in step 2 are used automatically.
+      # ── 5. Terraform init ──────────────────────────────────────────────────
       - name: Terraform init
         working-directory: ${{ env.TF_DIR }}
         run: terraform init -input=false
 
-      # ── 8. Read Terraform outputs (no apply) ───────────────────────────────
+      # ── 6. Read Terraform outputs (no apply) ───────────────────────────────
       #
-      # api_endpoint and cloudfront_domain are already in state from the
-      # previous apply — read them now so the Docker build can bake
-      # NEXT_PUBLIC_* values in before we run terraform apply.
+      # NEXT_PUBLIC_* values are baked into the Next.js build at build time, so
+      # they must be read from already-applied state before the OpenNext build
+      # runs (these outputs are stable across deploys — api_endpoint and the
+      # CloudFront domain don't change).
       - name: Read Terraform outputs
         id: tf-outputs
         working-directory: ${{ env.TF_DIR }}
         run: |
           echo "api_url=$(terraform output -raw api_endpoint)" >> "$GITHUB_OUTPUT"
           echo "cf_url=https://$(terraform output -raw cloudfront_domain)" >> "$GITHUB_OUTPUT"
+          echo "app_assets_bucket=$(terraform output -raw app_assets_bucket)" >> "$GITHUB_OUTPUT"
+          echo "app_distribution_id=$(terraform output -raw app_cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
 
-      # ── 9. Build & push Docker image ───────────────────────────────────────
+      # ── 7. Build the Next.js app via OpenNext ───────────────────────────────
       #
-      # Image is pushed BEFORE terraform apply so the task definition always
-      # points to an image that already exists in ECR. If this step fails,
-      # Terraform never updates the task definition, so the previous image
-      # keeps running.
-      - name: Build Docker image
+      # Produces .open-next/server-functions/default (the Lambda server
+      # bundle) and .open-next/assets (static assets synced to S3 below).
+      - name: Build app (OpenNext)
+        working-directory: app
         env:
-          ECR_URL: ${{ steps.ecr-url.outputs.url }}
-          IMAGE_TAG: ${{ github.sha }}
+          NEXT_PUBLIC_API_URL: ${{ steps.tf-outputs.outputs.api_url }}
+          NEXT_PUBLIC_CLOUDFRONT_URL: ${{ steps.tf-outputs.outputs.cf_url }}
         run: |
-          docker build \
-            --build-arg "NEXT_PUBLIC_API_URL=${{ steps.tf-outputs.outputs.api_url }}" \
-            --build-arg "NEXT_PUBLIC_CLOUDFRONT_URL=${{ steps.tf-outputs.outputs.cf_url }}" \
-            --tag "${ECR_URL}:${IMAGE_TAG}" \
-            --tag "${ECR_URL}:latest" \
-            ./app
+          npm ci
+          npm run build:opennext
 
-      - name: Push Docker image to ECR
-        env:
-          ECR_URL: ${{ steps.ecr-url.outputs.url }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Zip OpenNext server bundle
         run: |
-          docker push "${ECR_URL}:${IMAGE_TAG}"
-          docker push "${ECR_URL}:latest"
+          cd app/.open-next/server-functions/default
+          zip -qr ../../../../infra/lambda-src/opennext-server.zip .
 
-      # ── 10. Terraform apply ────────────────────────────────────────────────
+      # ── 8. Terraform apply ────────────────────────────────────────────────
       #
-      # Runs after the image is in ECR. Passes the Git SHA as app_image_tag
-      # so the ECS task definition is updated to the exact image just pushed.
+      # All Lambda zips (handlers + opennext-server) exist by this point, so
+      # the full config can be evaluated and applied in one shot.
       #
       # Force-unlock any stale lock left by a cancelled run before applying.
       # Safe in CI because only one pipeline runs at a time (concurrency group).
       - name: Terraform apply
         working-directory: ${{ env.TF_DIR }}
-        env:
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           LOCK_ID=$(aws dynamodb get-item \
             --table-name pensieve-tfstate-lock \
@@ -170,51 +133,30 @@ jobs:
             echo "Stale lock detected ($LOCK_ID) — force-unlocking..."
             terraform force-unlock -force "$LOCK_ID" || true
           fi
-          terraform apply \
-            -auto-approve \
-            -input=false \
-            -var="app_image_tag=${IMAGE_TAG}"
+          terraform apply -auto-approve -input=false
 
-      # ── 12. Force ECS redeploy ─────────────────────────────────────────────
-      #
-      # Terraform updates the task definition, but force-new-deployment ensures
-      # ECS actually replaces running tasks (not just on the next natural cycle).
-      - name: Force ECS service redeployment
+      # ── 9. Sync static assets to S3 ────────────────────────────────────────
+      - name: Sync static assets
+        env:
+          ASSETS_BUCKET: ${{ steps.tf-outputs.outputs.app_assets_bucket }}
         run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --force-new-deployment \
-            --region "$AWS_REGION" \
-            --output json \
-          | python3 -c "
-          import sys, json
-          s = json.load(sys.stdin)['service']
-          print(f\"  Service : {s['serviceName']}\")
-          print(f\"  Status  : {s['status']}\")
-          print(f\"  Tasks   : {s['runningCount']}/{s['desiredCount']} running\")
-          "
+          aws s3 sync app/.open-next/assets "s3://${ASSETS_BUCKET}/_assets" --delete
 
-      # ── 13. Wait for service stability ────────────────────────────────────
-      #
-      # Blocks until all desired tasks are RUNNING and pass health checks, or
-      # times out after ~10 minutes (AWS default for services-stable).
-      - name: Wait for ECS service to stabilise
+      # ── 10. Invalidate CloudFront cache ────────────────────────────────────
+      - name: Invalidate CloudFront cache
+        env:
+          DISTRIBUTION_ID: ${{ steps.tf-outputs.outputs.app_distribution_id }}
         run: |
-          echo "Waiting for ${ECS_SERVICE} to stabilise (up to ~10 min)..."
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --region "$AWS_REGION"
-          echo "ECS service is stable."
+          aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION_ID" \
+            --paths "/*"
 
-      # ── 14. Print deployment summary ───────────────────────────────────────
-      - name: Print ALB URL
+      # ── 11. Print deployment summary ───────────────────────────────────────
+      - name: Print deployment summary
         working-directory: ${{ env.TF_DIR }}
         run: |
-          ALB=$(terraform output -raw alb_dns_name)
           echo ""
           echo "Deploy complete"
-          echo "  Image tag : ${{ github.sha }}"
-          echo "  App URL   : http://${ALB}"
+          echo "  Commit  : ${{ github.sha }}"
+          echo "  App URL : $(terraform output -raw app_url)"
           echo ""

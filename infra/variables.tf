@@ -9,9 +9,3 @@ variable "environment" {
   type        = string
   default     = ""
 }
-
-variable "app_image_tag" {
-  description = "ECR image tag to deploy"
-  type        = string
-  default     = "latest"
-}
