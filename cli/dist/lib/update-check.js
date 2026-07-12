@@ -10,7 +10,7 @@ const config_1 = require("../config");
 const package_json_1 = __importDefault(require("../../package.json"));
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const GITHUB_PKG_URL = "https://raw.githubusercontent.com/Trevor-Warthman/pensieve/main/package.json";
-const INSTALL_CMD = "npm install -g Trevor-Warthman/pensieve";
+const INSTALL_CMD = "npm install -g pensieve-markdown";
 function getInstalledVersion() {
     return package_json_1.default.version ?? "0.0.0";
 }
