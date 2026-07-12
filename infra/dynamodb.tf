@@ -41,3 +41,30 @@ resource "aws_dynamodb_table" "lexicons" {
     projection_type = "ALL"
   }
 }
+
+resource "aws_dynamodb_table" "device_codes" {
+  name         = "${local.name_prefix}-device-codes"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "deviceCode"
+
+  attribute {
+    name = "deviceCode"
+    type = "S"
+  }
+
+  attribute {
+    name = "userCode"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "byUserCode"
+    hash_key        = "userCode"
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+}

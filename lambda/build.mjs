@@ -2,7 +2,7 @@ import * as esbuild from "esbuild";
 import { execSync } from "child_process";
 import { mkdirSync } from "fs";
 
-const handlers = ["auth", "lexicons", "sync", "invalidate"];
+const handlers = ["auth", "lexicons", "sync", "invalidate", "device"];
 const outDir = "../infra/lambda-src";
 
 mkdirSync(outDir, { recursive: true });
