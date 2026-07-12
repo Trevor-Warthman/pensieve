@@ -37,3 +37,13 @@ output "app_url" {
   description = "CloudFront domain for the OpenNext app (new Lambda-hosted stack)"
   value       = "https://${aws_cloudfront_distribution.app.domain_name}"
 }
+
+output "app_cloudfront_distribution_id" {
+  description = "CloudFront distribution ID for the OpenNext app (for cache invalidation)"
+  value       = aws_cloudfront_distribution.app.id
+}
+
+output "app_assets_bucket" {
+  description = "S3 bucket for OpenNext static assets"
+  value       = aws_s3_bucket.app_assets.id
+}
