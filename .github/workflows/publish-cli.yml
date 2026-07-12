@@ -7,9 +7,12 @@
 # "version" (keep package.json at repo root in sync too, since the CLI's
 # own update-check reads that one) in the same PR as your change.
 #
-# Auth: NPM_ACCESS_KEY repo secret (npm granular access token, read+write,
-# scoped to the pensieve-markdown package, 90-day expiry — rotate before
-# it lapses or publishing will start failing).
+# Auth: npm Trusted Publishing (OIDC) — no token, no secret. npm verifies
+# this exact workflow (org/repo/filename) is who it claims to be per-run via
+# a short-lived, cryptographically-signed identity token. Configured on the
+# npmjs.com side under the package's Settings -> Trusted Publisher (must
+# match this file's name exactly). Requires npm CLI >= 11.5.1, hence the
+# explicit upgrade step below (Node 20's bundled npm is older).
 #
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -19,6 +22,10 @@ on:
   push:
     branches:
       - main
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC trusted publishing
 
 jobs:
   publish:
@@ -34,6 +41,9 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm (trusted publishing needs >= 11.5.1)
+        run: npm install -g npm@latest
 
       - name: Check if this version is already published
         id: check
@@ -56,8 +66,6 @@ jobs:
         if: steps.check.outputs.published == 'false'
         working-directory: cli
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_KEY }}
 
       - name: Summary
         run: |
