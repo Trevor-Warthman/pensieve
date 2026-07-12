@@ -284,6 +284,7 @@ resource "aws_iam_role_policy" "github_actions" {
           "route53domains:ListDomains",
           "route53domains:ListOperations",
           "route53domains:GetOperationDetail",
+          "route53domains:ListTagsForDomain",
         ]
         Resource = ["*"]
       },
@@ -296,6 +297,7 @@ resource "aws_iam_role_policy" "github_actions" {
           "route53:ListResourceRecordSets",
           "route53:ChangeResourceRecordSets",
           "route53:GetChange",
+          "route53:ListTagsForResource",
         ]
         Resource = ["*"]
       },
