@@ -78,7 +78,9 @@ function DevicePageInner() {
             <label htmlFor="userCode" className="text-sm text-gray-500 dark:text-gray-400">Code</label>
             <input
               id="userCode"
+              name="userCode"
               type="text"
+              autoComplete="one-time-code"
               value={userCode}
               onChange={(e) => setUserCode(e.target.value)}
               required
@@ -91,6 +93,7 @@ function DevicePageInner() {
             <label htmlFor="email" className="text-sm text-gray-500 dark:text-gray-400">Email</label>
             <input
               id="email"
+              name="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -104,6 +107,7 @@ function DevicePageInner() {
             <label htmlFor="password" className="text-sm text-gray-500 dark:text-gray-400">Password</label>
             <input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
