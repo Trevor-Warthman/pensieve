@@ -267,7 +267,50 @@ resource "aws_iam_role_policy" "github_actions" {
           "arn:aws:dynamodb:us-east-1:931097097534:table/pensieve-users/*",
           "arn:aws:dynamodb:us-east-1:931097097534:table/pensieve-lexicons",
           "arn:aws:dynamodb:us-east-1:931097097534:table/pensieve-lexicons/*",
+          "arn:aws:dynamodb:us-east-1:931097097534:table/pensieve-device-codes",
+          "arn:aws:dynamodb:us-east-1:931097097534:table/pensieve-device-codes/*",
         ]
+      },
+
+      # ── Route53 / Route53Domains / ACM — pensieve.click DNS + TLS ──────────
+      # dns.tf was previously only ever applied manually (with broader Jarvis
+      # credentials), never through this CI role — it had zero permissions
+      # for any of these resource types.
+      {
+        Sid    = "Route53Domains"
+        Effect = "Allow"
+        Action = [
+          "route53domains:GetDomainDetail",
+          "route53domains:ListDomains",
+          "route53domains:ListOperations",
+          "route53domains:GetOperationDetail",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid    = "Route53"
+        Effect = "Allow"
+        Action = [
+          "route53:ListHostedZones",
+          "route53:GetHostedZone",
+          "route53:ListResourceRecordSets",
+          "route53:ChangeResourceRecordSets",
+          "route53:GetChange",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid    = "ACM"
+        Effect = "Allow"
+        Action = [
+          "acm:DescribeCertificate",
+          "acm:RequestCertificate",
+          "acm:DeleteCertificate",
+          "acm:ListCertificates",
+          "acm:ListTagsForCertificate",
+          "acm:AddTagsToCertificate",
+        ]
+        Resource = ["*"]
       },
 
       # ── CloudFront ─────────────────────────────────────────────────────────
