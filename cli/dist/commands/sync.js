@@ -41,6 +41,7 @@ const commander_1 = require("commander");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const crypto = __importStar(require("crypto"));
+const child_process_1 = require("child_process");
 const chalk_1 = __importDefault(require("chalk"));
 const ora_1 = __importDefault(require("ora"));
 const prompts_1 = require("@inquirer/prompts");
@@ -49,6 +50,17 @@ const config_1 = require("../config");
 const publish_filter_1 = require("../lib/publish-filter");
 function md5(buf) {
     return crypto.createHash("md5").update(buf).digest("hex");
+}
+function getGitDiff(dir) {
+    try {
+        // Check if it's a git repo
+        (0, child_process_1.execSync)("git rev-parse --is-inside-work-tree", { cwd: dir, stdio: "ignore" });
+        const stat = (0, child_process_1.execSync)("git diff --stat", { cwd: dir, encoding: "utf8" });
+        return stat.trim() || null;
+    }
+    catch {
+        return null;
+    }
 }
 function getContentType(filePath) {
     const ext = path.extname(filePath).toLowerCase();
@@ -149,14 +161,16 @@ async function requestUploadUrls(apiEndpoint, accessToken, lexiconSlug, fileList
 }
 exports.syncCommand = new commander_1.Command("sync")
     .description("Sync a local directory of markdown files to a Pensieve lexicon.")
-    .usage("<dir> --lexicon <slug> [--dry-run]")
+    .usage("<dir> --lexicon <slug> [--dry-run] [--yes]")
     .argument("[dir]", "Local directory of markdown files to sync")
     .option("-l, --lexicon <slug>", "Slug of the target lexicon (from /dashboard)")
     .option("--dry-run", "List files that would be uploaded without uploading anything")
+    .option("-y, --yes", "Skip confirmation prompt")
     .addHelpText("after", `
 Examples:
   pensieve sync ./notes --lexicon my-lexicon
-  pensieve sync /Users/you/notes --lexicon my-lexicon --dry-run`)
+  pensieve sync /Users/you/notes --lexicon my-lexicon --dry-run
+  pensieve sync ./notes --lexicon my-lexicon --yes`)
     .action(async (dir, opts) => {
     if (!dir) {
         dir = await (0, prompts_1.input)({ message: "Directory to sync (e.g. ./notes or /Users/you/notes):" });
@@ -259,9 +273,9 @@ Examples:
     }
     urlSpinner.succeed("Ready to upload");
     const urlMap = new Map(syncData.uploadUrls.map((u) => [u.path, u.uploadUrl]));
-    let uploaded = 0;
+    // ── Pre-upload Analysis ──────────────────────────────────────────────────
+    const toUpload = [];
     let skipped = 0;
-    // ── Upload files ─────────────────────────────────────────────────────────
     for (const file of allFiles) {
         const uploadUrl = urlMap.get(file.path);
         if (!uploadUrl)
@@ -276,9 +290,40 @@ Examples:
         const contentType = file.path === "_manifest.json"
             ? "application/json"
             : getContentType(file.abs);
+        toUpload.push({ path: file.path, abs: file.abs, contentType });
+    }
+    if (toUpload.length === 0) {
+        console.log(chalk_1.default.green("\nAll files are up to date. Nothing to upload."));
+        return;
+    }
+    // ── Confirmation ─────────────────────────────────────────────────────────
+    if (!opts.yes) {
+        console.log(chalk_1.default.bold("\nFiles to be uploaded:"));
+        for (const file of toUpload) {
+            if (file.path !== "_manifest.json") {
+                console.log(`  ${chalk_1.default.cyan(file.path)}`);
+            }
+        }
+        const diff = getGitDiff(absDir);
+        if (diff) {
+            console.log(chalk_1.default.bold("\nLocal changes (git diff --stat):"));
+            console.log(diff);
+        }
+        console.log("");
+        const ok = await (0, prompts_1.confirm)({ message: "Does this look right?", default: false });
+        if (!ok) {
+            console.log(chalk_1.default.yellow("Aborted."));
+            return;
+        }
+    }
+    // ── Upload files ─────────────────────────────────────────────────────────
+    let uploaded = 0;
+    for (const file of toUpload) {
+        const uploadUrl = urlMap.get(file.path);
+        const buf = file.path === "_manifest.json" ? manifestBuf : fs.readFileSync(file.abs);
         const putRes = await fetch(uploadUrl, {
             method: "PUT",
-            headers: { "Content-Type": contentType },
+            headers: { "Content-Type": file.contentType },
             body: buf,
         });
         if (!putRes.ok) {

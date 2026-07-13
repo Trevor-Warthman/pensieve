@@ -2,9 +2,10 @@ import { Command } from "commander";
 import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
+import { execSync } from "child_process";
 import chalk from "chalk";
 import ora from "ora";
-import { input } from "@inquirer/prompts";
+import { input, confirm } from "@inquirer/prompts";
 import matter from "gray-matter";
 import { config } from "../config";
 import { scanVault } from "../lib/publish-filter";
@@ -16,6 +17,17 @@ interface SyncResponse {
 
 function md5(buf: Buffer): string {
   return crypto.createHash("md5").update(buf).digest("hex");
+}
+
+function getGitDiff(dir: string): string | null {
+  try {
+    // Check if it's a git repo
+    execSync("git rev-parse --is-inside-work-tree", { cwd: dir, stdio: "ignore" });
+    const stat = execSync("git diff --stat", { cwd: dir, encoding: "utf8" });
+    return stat.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 function getContentType(filePath: string): string {
@@ -149,15 +161,17 @@ async function requestUploadUrls(
 
 export const syncCommand = new Command("sync")
   .description("Sync a local directory of markdown files to a Pensieve lexicon.")
-  .usage("<dir> --lexicon <slug> [--dry-run]")
+  .usage("<dir> --lexicon <slug> [--dry-run] [--yes]")
   .argument("[dir]", "Local directory of markdown files to sync")
   .option("-l, --lexicon <slug>", "Slug of the target lexicon (from /dashboard)")
   .option("--dry-run", "List files that would be uploaded without uploading anything")
+  .option("-y, --yes", "Skip confirmation prompt")
   .addHelpText("after", `
 Examples:
   pensieve sync ./notes --lexicon my-lexicon
-  pensieve sync /Users/you/notes --lexicon my-lexicon --dry-run`)
-  .action(async (dir: string | undefined, opts: { lexicon?: string; dryRun?: boolean }) => {
+  pensieve sync /Users/you/notes --lexicon my-lexicon --dry-run
+  pensieve sync ./notes --lexicon my-lexicon --yes`)
+  .action(async (dir: string | undefined, opts: { lexicon?: string; dryRun?: boolean; yes?: boolean }) => {
     if (!dir) {
       dir = await input({ message: "Directory to sync (e.g. ./notes or /Users/you/notes):" });
     }
@@ -260,10 +274,11 @@ Examples:
     urlSpinner.succeed("Ready to upload");
 
     const urlMap = new Map(syncData.uploadUrls.map((u) => [u.path, u.uploadUrl]));
-    let uploaded = 0;
+
+    // ── Pre-upload Analysis ──────────────────────────────────────────────────
+    const toUpload: Array<{ path: string; abs: string; contentType: string }> = [];
     let skipped = 0;
 
-    // ── Upload files ─────────────────────────────────────────────────────────
     for (const file of allFiles) {
       const uploadUrl = urlMap.get(file.path);
       if (!uploadUrl) continue;
@@ -281,9 +296,46 @@ Examples:
         ? "application/json"
         : getContentType(file.abs);
 
+      toUpload.push({ path: file.path, abs: file.abs, contentType });
+    }
+
+    if (toUpload.length === 0) {
+      console.log(chalk.green("\nAll files are up to date. Nothing to upload."));
+      return;
+    }
+
+    // ── Confirmation ─────────────────────────────────────────────────────────
+    if (!opts.yes) {
+      console.log(chalk.bold("\nFiles to be uploaded:"));
+      for (const file of toUpload) {
+        if (file.path !== "_manifest.json") {
+          console.log(`  ${chalk.cyan(file.path)}`);
+        }
+      }
+
+      const diff = getGitDiff(absDir);
+      if (diff) {
+        console.log(chalk.bold("\nLocal changes (git diff --stat):"));
+        console.log(diff);
+      }
+
+      console.log("");
+      const ok = await confirm({ message: "Does this look right?", default: false });
+      if (!ok) {
+        console.log(chalk.yellow("Aborted."));
+        return;
+      }
+    }
+
+    // ── Upload files ─────────────────────────────────────────────────────────
+    let uploaded = 0;
+    for (const file of toUpload) {
+      const uploadUrl = urlMap.get(file.path)!;
+      const buf = file.path === "_manifest.json" ? manifestBuf : fs.readFileSync(file.abs);
+
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": contentType },
+        headers: { "Content-Type": file.contentType },
         body: buf,
       });
 
