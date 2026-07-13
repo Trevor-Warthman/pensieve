@@ -12,7 +12,7 @@
 # a short-lived, cryptographically-signed identity token. Configured on the
 # npmjs.com side under the package's Settings -> Trusted Publisher (must
 # match this file's name exactly). Requires npm CLI >= 11.5.1, hence the
-# explicit upgrade step below (Node 20's bundled npm is older).
+# explicit upgrade step below (the runner's bundled npm is older).
 #
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -39,13 +39,11 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
       - name: Upgrade npm (trusted publishing needs >= 11.5.1)
-        # npm@latest (12.x) requires Node >= 22; pin to the 11.x line, which
-        # supports trusted publishing and still runs on Node 20.
-        run: npm install -g npm@11
+        run: npm install -g npm@latest
 
       - name: Check if this version is already published
         id: check
