@@ -20,7 +20,7 @@ import * as os from 'os';
 
 const CLI = path.resolve(__dirname, '../../cli/dist/index.js');
 const CONF_PATH = path.join(os.homedir(), 'Library', 'Preferences', 'pensieve-nodejs', 'config.json');
-const API = 'http://localhost:3000/api';
+const API = 'http://localhost:3001/api';
 const NOTES_DIR = path.resolve(__dirname, '../../../test-markdown');
 
 const RUN_ID = Date.now().toString(36);

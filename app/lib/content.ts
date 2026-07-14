@@ -322,9 +322,8 @@ export async function buildSearchIndex(
   publishDefault = true
 ): Promise<SearchEntry[]> {
   const notes = await listNotes(s3Prefix, publishDefault);
-  const entries: SearchEntry[] = [];
 
-  for (const note of notes) {
+  return Promise.all(notes.map(async (note) => {
     let rawContent = "";
     try {
       const raw = await fetchText(note.s3Key);
@@ -332,16 +331,15 @@ export async function buildSearchIndex(
       rawContent = stripMarkdown(content).slice(0, 500);
     } catch { /* fall back to empty */ }
 
-    entries.push({ title: note.title, slug: note.slug.join("/"), content: rawContent, tags: note.tags });
-  }
-
-  return entries;
+    return { title: note.title, slug: note.slug.join("/"), content: rawContent, tags: note.tags };
+  }));
 }
 
 export async function buildGraphData(
   s3Prefix: string,
   publishDefault = true
 ): Promise<GraphData> {
+  const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const notes = await listNotes(s3Prefix, publishDefault);
   const publishedSlugs = new Set(notes.map((n) => n.slug.join("/")));
 
@@ -351,24 +349,40 @@ export async function buildGraphData(
 
   const edgeSet = new Set<string>();
   const edges: GraphEdge[] = [];
+
+  function addEdge(sourceId: string, target: string) {
+    if (!publishedSlugs.has(target) || !publishedSlugs.has(sourceId) || target === sourceId) return;
+    const key = `${sourceId}→${target}`;
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+    edges.push({ source: sourceId, target });
+    nodeMap.get(sourceId)!.linkCount++;
+    nodeMap.get(target)!.linkCount++;
+  }
+
+  const manifest = await fetchManifest(prefix);
+  if (manifest) {
+    // Manifest already encodes backlinks (target -> sources); no per-note S3 fetch needed.
+    for (const [target, sources] of Object.entries(manifest.backlinks)) {
+      for (const source of sources) addEdge(source, target);
+    }
+    return { nodes: Array.from(nodeMap.values()), edges };
+  }
+
+  // Legacy slow path: no manifest, scan every note's raw content for wikilinks.
   const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+  const noteContents = await Promise.all(
+    notes.map(async (note) => ({
+      sourceId: note.slug.join("/"),
+      content: (matter(await fetchText(note.s3Key))).content,
+    }))
+  );
 
-  for (const note of notes) {
-    const raw = await fetchText(note.s3Key);
-    const { content } = matter(raw);
-    const sourceId = note.slug.join("/");
-
+  for (const { sourceId, content } of noteContents) {
     wikilinkRegex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = wikilinkRegex.exec(content)) !== null) {
-      const target = match[1].trim().toLowerCase();
-      if (!publishedSlugs.has(target) || target === sourceId) continue;
-      const key = `${sourceId}→${target}`;
-      if (edgeSet.has(key)) continue;
-      edgeSet.add(key);
-      edges.push({ source: sourceId, target });
-      nodeMap.get(sourceId)!.linkCount++;
-      nodeMap.get(target)!.linkCount++;
+      addEdge(sourceId, match[1].trim().toLowerCase());
     }
   }
 

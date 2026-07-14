@@ -198,6 +198,37 @@ A flat top-level note (not in any folder) to show folders and flat
 notes rendering side by side in the sidebar.
 `,
   },
+  {
+    path: "clade/secret.md",
+    content: `---
+title: Secret Note
+publish: true
+tags: [internal]
+---
+
+# Secret Note
+
+Lives under the "clade" folder, which is hidden from sidebar/search nav
+but still directly reachable by URL.
+`,
+  },
+  {
+    path: "dataview-demo.md",
+    content: `---
+title: Dataview Demo
+publish: true
+tags: [demo]
+---
+
+# Dataview Demo
+
+This note has an unsupported Dataview query below.
+
+\`\`\`dataview
+LIST FROM #guide
+\`\`\`
+`,
+  },
 ];
 
 async function ensureBucket() {

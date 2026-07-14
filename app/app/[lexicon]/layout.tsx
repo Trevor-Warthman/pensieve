@@ -38,6 +38,15 @@ function verifyLexiconToken(token: string | undefined, slug: string, secret: str
   }
 }
 
+/** Folder names hidden from sidebar/search nav (still directly loadable by URL). */
+const HIDDEN_FOLDERS = new Set(["clade"]);
+
+function filterHiddenFolders<T extends { slug: string[] }>(notes: T[]): T[] {
+  return notes.filter(
+    (note) => !note.slug.some((segment) => HIDDEN_FOLDERS.has(segment.toLowerCase()))
+  );
+}
+
 function buildSidebarTree(
   notes: Array<{ slug: string[]; title: string }>,
   lexiconSlug: string
@@ -45,7 +54,7 @@ function buildSidebarTree(
   const root: SidebarItem[] = [];
   const folders = new Map<string, SidebarItem>();
 
-  const sorted = [...notes].sort((a, b) =>
+  const sorted = [...filterHiddenFolders(notes)].sort((a, b) =>
     a.slug.join("/").localeCompare(b.slug.join("/"))
   );
 
@@ -97,7 +106,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
 
   const notes = await listNotes(lexiconS3Prefix(lexicon), lexicon.publishDefault);
   const sidebarItems = buildSidebarTree(notes, slug);
-  const searchNotes = notes.map((n) => ({
+  const searchNotes = filterHiddenFolders(notes).map((n) => ({
     title: n.title,
     href: `/${slug}/${n.slug.map((s) => encodeURIComponent(s)).join("/")}`,
   }));
@@ -122,6 +131,15 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                 </svg>
                 Full-text search
+              </Link>
+              <Link
+                href={`/${slug}/tags`}
+                className="flex items-center gap-2 px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5.586a1 1 0 01.707.293l6.414 6.414a1 1 0 010 1.414l-8.586 8.586a1 1 0 01-1.414 0l-6.414-6.414A1 1 0 013 12.586V7a4 4 0 014-4z" />
+                </svg>
+                Tags
               </Link>
               <Link
                 href={`/${slug}/graph`}
