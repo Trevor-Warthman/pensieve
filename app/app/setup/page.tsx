@@ -142,8 +142,8 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 function Pre({ code, className }: { code: string; className?: string }) {
   return (
-    <div className={`rounded bg-gray-900 border border-gray-800 px-4 py-3 ${className ?? ""}`}>
-      <code className="text-sm text-gray-300 font-mono">{code}</code>
+    <div className={`rounded bg-gray-900 border border-gray-800 px-4 py-3 overflow-x-auto ${className ?? ""}`}>
+      <code className="text-sm text-gray-300 font-mono whitespace-pre">{code}</code>
     </div>
   );
 }
