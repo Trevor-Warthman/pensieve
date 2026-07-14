@@ -90,6 +90,114 @@ A note nested under a "guides" folder, used to exercise the sidebar's
 folder-expand behavior (folders have no page of their own).
 `,
   },
+  {
+    path: "guides/deployment.md",
+    content: `---
+title: Deployment Guide
+publish: true
+tags: [guide]
+---
+
+# Deployment Guide
+
+A second note in the "guides" folder, alongside [[setup]].
+`,
+  },
+  {
+    path: "guides/advanced/scaling.md",
+    content: `---
+title: Scaling Tips
+publish: true
+tags: [guide, advanced]
+---
+
+# Scaling Tips
+
+Nested two levels deep, under "guides/advanced" — exercises multi-level
+folder indentation in the sidebar.
+`,
+  },
+  {
+    path: "guides/advanced/security.md",
+    content: `---
+title: Security Hardening
+publish: true
+tags: [guide, advanced]
+---
+
+# Security Hardening
+
+A second note under "guides/advanced".
+`,
+  },
+  {
+    path: "api/overview.md",
+    content: `---
+title: API Overview
+publish: true
+tags: [api]
+---
+
+# API Overview
+
+A separate top-level folder from "guides", to show multiple sibling
+folders in the sidebar.
+`,
+  },
+  {
+    path: "api/authentication.md",
+    content: `---
+title: Authentication
+publish: true
+tags: [api]
+---
+
+# Authentication
+
+Covers login flows. See also [[api/overview]].
+`,
+  },
+  {
+    path: "recipes/pancakes.md",
+    content: `---
+title: Pancakes
+publish: true
+tags: [recipe]
+---
+
+# Pancakes
+
+A third top-level folder, unrelated to the others, to show the sidebar
+handling several independent folder trees at once.
+`,
+  },
+  {
+    path: "recipes/waffles.md",
+    content: `---
+title: Waffles
+publish: true
+tags: [recipe]
+---
+
+# Waffles
+
+Another recipe note.
+`,
+  },
+  {
+    path: "changelog.md",
+    content: `---
+title: Changelog
+publish: true
+tags: [meta]
+---
+
+# Changelog
+
+A flat top-level note (not in any folder) to show folders and flat
+notes rendering side by side in the sidebar.
+`,
+  },
 ];
 
 async function ensureBucket() {
