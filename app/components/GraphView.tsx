@@ -131,7 +131,7 @@ export default function GraphView({ nodes, edges, lexiconSlug }: GraphViewProps)
   return (
     <svg
       ref={svgRef}
-      className="w-full h-full"
+      className="block w-full h-full"
       style={{ background: "transparent" }}
     />
   );

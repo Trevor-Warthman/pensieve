@@ -76,6 +76,7 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
   const wikilinkRegex = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
   const notes: ManifestNote[] = [];
   const backlinks: Record<string, string[]> = {};
+  const parsed: Array<{ slug: string; content: string }> = [];
 
   for (const file of mdFiles) {
     const rel = path.relative(absDir, file).replace(/\\/g, "/");
@@ -86,16 +87,32 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
       const title = (data.title as string) ?? slug.split("/").pop() ?? "Untitled";
       const tags = Array.isArray(data.tags) ? (data.tags as string[]) : [];
       notes.push({ slug, title, tags, content: stripMarkdown(content).slice(0, 500) });
-
-      wikilinkRegex.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = wikilinkRegex.exec(content)) !== null) {
-        const target = match[1].trim().toLowerCase();
-        if (!backlinks[target]) backlinks[target] = [];
-        if (!backlinks[target].includes(slug)) backlinks[target].push(slug);
-      }
+      parsed.push({ slug, content });
     } catch {
       // skip unparseable files
+    }
+  }
+
+  // Obsidian wikilinks are usually bare note names (e.g. [[Hesta]], resolved
+  // by unique filename regardless of folder), not full paths — resolve
+  // through this basename index before falling back to a literal match, or
+  // almost every real-world wikilink misses and backlinks/graph end up
+  // nearly empty despite a densely cross-linked vault.
+  const basenameToSlug = new Map<string, string>();
+  for (const { slug } of parsed) {
+    const basename = slug.split("/").pop()!.toLowerCase();
+    if (!basenameToSlug.has(basename)) basenameToSlug.set(basename, slug);
+  }
+
+  for (const { slug, content } of parsed) {
+    wikilinkRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = wikilinkRegex.exec(content)) !== null) {
+      const raw = match[1].trim().toLowerCase();
+      const resolved = basenameToSlug.get(raw.split("/").pop()!) ?? raw;
+      const target = resolved.toLowerCase();
+      if (!backlinks[target]) backlinks[target] = [];
+      if (!backlinks[target].includes(slug)) backlinks[target].push(slug);
     }
   }
 

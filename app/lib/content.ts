@@ -377,7 +377,13 @@ export async function buildGraphData(
 ): Promise<GraphData> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const notes = await listNotes(s3Prefix, publishDefault);
-  const publishedSlugs = new Set(notes.map((n) => n.slug.join("/")));
+
+  // Backlink/wikilink targets are lowercased (case-insensitive matching per
+  // Obsidian convention), but node ids must stay in canonical case since
+  // GraphView navigates via `/${lexiconSlug}/${node.id}`. Resolve through
+  // this lookup before touching nodeMap/edges.
+  const canonicalSlug = new Map<string, string>();
+  for (const n of notes) canonicalSlug.set(n.slug.join("/").toLowerCase(), n.slug.join("/"));
 
   const nodeMap = new Map<string, GraphNode>(
     notes.map((n) => [n.slug.join("/"), { id: n.slug.join("/"), title: n.title, linkCount: 0 }])
@@ -386,8 +392,10 @@ export async function buildGraphData(
   const edgeSet = new Set<string>();
   const edges: GraphEdge[] = [];
 
-  function addEdge(sourceId: string, target: string) {
-    if (!publishedSlugs.has(target) || !publishedSlugs.has(sourceId) || target === sourceId) return;
+  function addEdge(sourceRaw: string, targetRaw: string) {
+    const sourceId = canonicalSlug.get(sourceRaw.toLowerCase());
+    const target = canonicalSlug.get(targetRaw.toLowerCase());
+    if (!sourceId || !target || target === sourceId) return;
     const key = `${sourceId}→${target}`;
     if (edgeSet.has(key)) return;
     edgeSet.add(key);
@@ -416,7 +424,7 @@ export async function buildGraphData(
     wikilinkRegex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = wikilinkRegex.exec(content)) !== null) {
-      addEdge(sourceId, match[1].trim().toLowerCase());
+      addEdge(sourceId, match[1].trim());
     }
   }
 
