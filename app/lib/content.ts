@@ -61,7 +61,7 @@ export interface GraphData {
 
 interface Manifest {
   version: number;
-  notes: Array<{ slug: string; title: string; tags: string[] }>;
+  notes: Array<{ slug: string; title: string; tags: string[]; content?: string }>;
   backlinks: Record<string, string[]>;
   assets?: Record<string, string>; // lowercase basename → relative path
 }
@@ -305,6 +305,23 @@ export async function getNote(
   };
 }
 
+/** Run `fn` over `items` with at most `limit` in flight at once.
+ *  Unbounded Promise.all over hundreds of notes can overwhelm S3/MinIO
+ *  connection pools and is actually slower than a modest batch size.
+ */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 function stripMarkdown(md: string): string {
   return md
     .replace(/!\[.*?\]\(.*?\)/g, "")
@@ -321,9 +338,28 @@ export async function buildSearchIndex(
   s3Prefix: string,
   publishDefault = true
 ): Promise<SearchEntry[]> {
+  const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const notes = await listNotes(s3Prefix, publishDefault);
 
-  return Promise.all(notes.map(async (note) => {
+  // Manifest (when present) already carries a stripped content excerpt per
+  // note, computed once at sync time — avoids an S3 GET per note on every
+  // /search request, which was the dominant cost on vaults with hundreds
+  // of notes (~800 notes took 10-20s to render search with no caching).
+  const manifest = await fetchManifest(prefix);
+  const manifestContent = new Map<string, string>();
+  if (manifest) {
+    for (const n of manifest.notes) {
+      if (n.content !== undefined) manifestContent.set(n.slug.toLowerCase(), n.content);
+    }
+  }
+
+  return mapWithConcurrency(notes, 20, async (note) => {
+    const slugStr = note.slug.join("/");
+    const cached = manifestContent.get(slugStr.toLowerCase());
+    if (cached !== undefined) {
+      return { title: note.title, slug: slugStr, content: cached, tags: note.tags };
+    }
+
     let rawContent = "";
     try {
       const raw = await fetchText(note.s3Key);
@@ -331,8 +367,8 @@ export async function buildSearchIndex(
       rawContent = stripMarkdown(content).slice(0, 500);
     } catch { /* fall back to empty */ }
 
-    return { title: note.title, slug: note.slug.join("/"), content: rawContent, tags: note.tags };
-  }));
+    return { title: note.title, slug: slugStr, content: rawContent, tags: note.tags };
+  });
 }
 
 export async function buildGraphData(
@@ -371,12 +407,10 @@ export async function buildGraphData(
 
   // Legacy slow path: no manifest, scan every note's raw content for wikilinks.
   const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
-  const noteContents = await Promise.all(
-    notes.map(async (note) => ({
-      sourceId: note.slug.join("/"),
-      content: (matter(await fetchText(note.s3Key))).content,
-    }))
-  );
+  const noteContents = await mapWithConcurrency(notes, 20, async (note) => ({
+    sourceId: note.slug.join("/"),
+    content: (matter(await fetchText(note.s3Key))).content,
+  }));
 
   for (const { sourceId, content } of noteContents) {
     wikilinkRegex.lastIndex = 0;

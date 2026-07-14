@@ -45,6 +45,23 @@ interface ManifestNote {
   slug: string;
   title: string;
   tags: string[];
+  content: string; // stripped, truncated body — avoids a per-note S3 fetch to build search indexes
+}
+
+/** Strip markdown syntax down to plain text for a search-index excerpt.
+ *  Mirrors app/lib/content.ts's stripMarkdown — kept in sync manually since
+ *  the CLI and app are separate packages with no shared lib today.
+ */
+function stripMarkdown(md: string): string {
+  return md
+    .replace(/!\[.*?\]\(.*?\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, "$1")
+    .replace(/#{1,6}\s+/g, "")
+    .replace(/[*_~`]{1,3}/g, "")
+    .replace(/>\s+/g, "")
+    .replace(/\n+/g, " ")
+    .trim();
 }
 
 interface Manifest {
@@ -68,7 +85,7 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
       const { data, content } = matter.read(file);
       const title = (data.title as string) ?? slug.split("/").pop() ?? "Untitled";
       const tags = Array.isArray(data.tags) ? (data.tags as string[]) : [];
-      notes.push({ slug, title, tags });
+      notes.push({ slug, title, tags, content: stripMarkdown(content).slice(0, 500) });
 
       wikilinkRegex.lastIndex = 0;
       let match: RegExpExecArray | null;

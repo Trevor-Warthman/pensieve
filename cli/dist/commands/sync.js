@@ -72,6 +72,21 @@ function getContentType(filePath) {
     };
     return types[ext] ?? "application/octet-stream";
 }
+/** Strip markdown syntax down to plain text for a search-index excerpt.
+ *  Mirrors app/lib/content.ts's stripMarkdown — kept in sync manually since
+ *  the CLI and app are separate packages with no shared lib today.
+ */
+function stripMarkdown(md) {
+    return md
+        .replace(/!\[.*?\]\(.*?\)/g, "")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, "$1")
+        .replace(/#{1,6}\s+/g, "")
+        .replace(/[*_~`]{1,3}/g, "")
+        .replace(/>\s+/g, "")
+        .replace(/\n+/g, " ")
+        .trim();
+}
 function buildManifest(mdFiles, assetFiles, absDir) {
     const wikilinkRegex = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
     const notes = [];
@@ -83,7 +98,7 @@ function buildManifest(mdFiles, assetFiles, absDir) {
             const { data, content } = gray_matter_1.default.read(file);
             const title = data.title ?? slug.split("/").pop() ?? "Untitled";
             const tags = Array.isArray(data.tags) ? data.tags : [];
-            notes.push({ slug, title, tags });
+            notes.push({ slug, title, tags, content: stripMarkdown(content).slice(0, 500) });
             wikilinkRegex.lastIndex = 0;
             let match;
             while ((match = wikilinkRegex.exec(content)) !== null) {
