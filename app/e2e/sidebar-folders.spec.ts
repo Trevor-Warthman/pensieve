@@ -25,5 +25,5 @@ test('clicking a folder toggles its children without navigating', async ({ page 
 test('note nested under a folder loads without a 404', async ({ page }) => {
   const res = await page.goto(`/${LEXICON}/guides/setup`);
   expect(res!.status()).toBeLessThan(400);
-  await expect(page.getByRole('heading', { name: 'Setup Guide' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Setup Guide' }).first()).toBeVisible();
 });
