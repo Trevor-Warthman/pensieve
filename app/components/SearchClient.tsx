@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import Fuse from "fuse.js";
 import type { SearchEntry } from "@/lib/content";
 
@@ -100,7 +101,7 @@ export default function SearchClient({ index, lexiconSlug, initialQuery = "" }: 
       <ul className="space-y-3">
         {results.map(({ item }) => (
           <li key={item.slug}>
-            <a
+            <Link
               href={`/${lexiconSlug}/${item.slug.split("/").map((s) => encodeURIComponent(s)).join("/")}`}
               className="block p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
             >
@@ -121,7 +122,7 @@ export default function SearchClient({ index, lexiconSlug, initialQuery = "" }: 
                   ))}
                 </div>
               )}
-            </a>
+            </Link>
           </li>
         ))}
       </ul>
