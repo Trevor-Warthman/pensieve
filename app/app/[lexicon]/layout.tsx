@@ -39,7 +39,7 @@ function verifyLexiconToken(token: string | undefined, slug: string, secret: str
 }
 
 /** Folder names hidden from sidebar/search nav (still directly loadable by URL). */
-const HIDDEN_FOLDERS = new Set(["clade"]);
+const HIDDEN_FOLDERS = new Set(["clade", "claude"]);
 
 function filterHiddenFolders<T extends { slug: string[] }>(notes: T[]): T[] {
   return notes.filter(
