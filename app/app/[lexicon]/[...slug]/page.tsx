@@ -61,12 +61,13 @@ export default async function NotePage({ params }: NotePageProps) {
           {note.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-8">
               {note.tags.map((tag) => (
-                <span
+                <Link
                   key={tag}
-                  className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+                  href={`/${lexiconSlug}/tags/${encodeURIComponent(tag)}`}
+                  className="tag-pill text-xs"
                 >
                   {tag}
-                </span>
+                </Link>
               ))}
             </div>
           )}

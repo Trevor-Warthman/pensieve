@@ -64,7 +64,7 @@ export default function DashboardPage() {
         {view === "list" && (
           <button
             onClick={() => setView("create")}
-            className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 transition-opacity"
+            className="btn-primary"
           >
             New Lexicon
           </button>
@@ -72,7 +72,7 @@ export default function DashboardPage() {
         {settingsLexicon && (
           <button
             onClick={() => setView("list")}
-            className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+            className="text-sm text-gray-500 hover:text-amber-700 dark:hover:text-amber-400 transition-colors"
           >
             ← Back
           </button>
@@ -193,7 +193,7 @@ function LexiconList({
             </p>
             <button
               onClick={onCreateClick}
-              className="mt-3 px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 transition-opacity"
+              className="btn-primary mt-3"
             >
               New Lexicon
             </button>
@@ -257,7 +257,7 @@ function LexiconList({
                       </button>
                       <button
                         onClick={() => setConfirmDeleteId(null)}
-                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-400 dark:hover:border-amber-600 transition-colors"
                       >
                         Cancel
                       </button>
@@ -266,14 +266,14 @@ function LexiconList({
                     <>
                       <button
                         onClick={() => onSettingsClick(lex.lexiconId)}
-                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-400 dark:hover:border-amber-600 hover:text-amber-700 dark:hover:text-amber-400 transition-colors"
                       >
                         Settings
                       </button>
                       <button
                         onClick={() => toggleStatus(lex)}
                         disabled={isBusy}
-                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 disabled:opacity-50 transition-colors"
+                        className="text-xs px-2.5 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-amber-400 dark:hover:border-amber-600 hover:text-amber-700 dark:hover:text-amber-400 disabled:opacity-50 transition-colors"
                       >
                         {isBusy ? "…" : isUnpublished ? "Republish" : "Unpublish"}
                       </button>
@@ -367,7 +367,7 @@ function LexiconSettings({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
-          className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+          className="input-field"
         />
       </div>
 
@@ -378,7 +378,7 @@ function LexiconSettings({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="A short description of this lexicon"
-          className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+          className="input-field"
         />
       </div>
 
@@ -440,7 +440,7 @@ function LexiconSettings({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={hasPassword ? "Enter new password to change" : "Set a password (leave blank for public)"}
-              className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500 pr-16"
+              className="input-field pr-16"
             />
             {password && (
               <button
@@ -464,14 +464,14 @@ function LexiconSettings({
         <button
           type="submit"
           disabled={submitting}
-          className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="btn-primary"
         >
           {submitting ? "Saving…" : "Save changes"}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+          className="btn-secondary"
         >
           Cancel
         </button>
@@ -536,7 +536,7 @@ function CreateLexiconForm({
           value={title}
           onChange={(e) => { setTitle(e.target.value); setSlug(deriveSlug(e.target.value)); }}
           required
-          className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+          className="input-field"
           placeholder="My Notes"
         />
       </div>
@@ -549,7 +549,7 @@ function CreateLexiconForm({
           onChange={(e) => setSlug(e.target.value)}
           required
           pattern="[a-z0-9-]+"
-          className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 font-mono outline-none focus:border-gray-400 dark:focus:border-gray-500"
+          className="input-field font-mono"
           placeholder="my-notes"
         />
         <p className="text-xs text-gray-400 dark:text-gray-600">Lowercase letters, numbers, hyphens only</p>
@@ -574,14 +574,14 @@ function CreateLexiconForm({
         <button
           type="submit"
           disabled={submitting}
-          className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+          className="btn-primary"
         >
           {submitting ? "Creating…" : "Create"}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm hover:border-gray-400 dark:hover:border-gray-500 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+          className="btn-secondary"
         >
           Cancel
         </button>
@@ -610,7 +610,7 @@ function NextSteps({ slug, onDone }: { slug: string; onDone: () => void }) {
       </p>
       <button
         onClick={onDone}
-        className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 transition-opacity"
+        className="btn-primary"
       >
         Go to Dashboard
       </button>
