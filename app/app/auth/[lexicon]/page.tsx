@@ -68,7 +68,7 @@ export default function LexiconAuthPage({ params }: { params: Promise<{ lexicon:
               onChange={(e) => setPassword(e.target.value)}
               autoFocus
               required
-              className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+              className="input-field"
               placeholder="Enter password"
             />
           </div>
@@ -78,7 +78,7 @@ export default function LexiconAuthPage({ params }: { params: Promise<{ lexicon:
           <button
             type="submit"
             disabled={submitting}
-            className="w-full px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="btn-primary w-full"
           >
             {submitting ? "Verifying…" : "Unlock"}
           </button>

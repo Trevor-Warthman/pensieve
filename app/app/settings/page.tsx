@@ -137,7 +137,7 @@ export default function SettingsPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your name"
-                  className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+                  className="input-field"
                 />
               </div>
               <div className="space-y-1">
@@ -147,7 +147,7 @@ export default function SettingsPage() {
                   value={emailField}
                   onChange={(e) => setEmailField(e.target.value)}
                   required
-                  className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+                  className="input-field"
                 />
               </div>
               {profileMsg && (
@@ -158,7 +158,7 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={profileSaving}
-                className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="btn-primary"
               >
                 {profileSaving ? "Saving…" : "Save changes"}
               </button>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+                  className="input-field"
                 />
               </div>
               <div className="space-y-1">
@@ -191,7 +191,7 @@ export default function SettingsPage() {
                   required
                   minLength={8}
                   autoComplete="new-password"
-                  className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+                  className="input-field"
                 />
               </div>
               <div className="space-y-1">
@@ -202,7 +202,7 @@ export default function SettingsPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   autoComplete="new-password"
-                  className="w-full rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+                  className="input-field"
                 />
               </div>
               {passwordMsg && (
@@ -213,7 +213,7 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={passwordSaving}
-                className="px-4 py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                className="btn-primary"
               >
                 {passwordSaving ? "Updating…" : "Update password"}
               </button>

@@ -85,7 +85,7 @@ function DevicePageInner() {
               onChange={(e) => setUserCode(e.target.value)}
               required
               placeholder="XXXX-XXXX"
-              className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500 tracking-widest uppercase"
+              className="input-field tracking-widest uppercase"
             />
           </div>
 
@@ -99,7 +99,7 @@ function DevicePageInner() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+              className="input-field"
             />
           </div>
 
@@ -113,7 +113,7 @@ function DevicePageInner() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+              className="input-field"
             />
           </div>
 
@@ -122,7 +122,7 @@ function DevicePageInner() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 rounded bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="btn-primary w-full py-2.5"
           >
             {loading ? "Approving…" : "Approve"}
           </button>

@@ -106,10 +106,10 @@ export default function PageSearch({ notes }: PageSearchProps) {
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="w-full max-w-lg mx-4 rounded-lg border border-gray-700 bg-gray-900 shadow-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-700">
+      <div className="w-full max-w-lg mx-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <svg
-            className="w-4 h-4 text-gray-400 shrink-0"
+            className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -128,9 +128,9 @@ export default function PageSearch({ notes }: PageSearchProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Jump to page…"
-            className="flex-1 bg-transparent text-sm text-gray-100 placeholder-gray-500 outline-none"
+            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
           />
-          <kbd className="text-xs text-gray-500 border border-gray-700 rounded px-1.5 py-0.5">
+          <kbd className="text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5">
             esc
           </kbd>
         </div>
@@ -141,8 +141,8 @@ export default function PageSearch({ notes }: PageSearchProps) {
                 <button
                   className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                     i === activeIndex
-                      ? "bg-gray-700 text-white"
-                      : "text-gray-300 hover:bg-gray-800"
+                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                   onMouseEnter={() => setActiveIndex(i)}
                   onMouseDown={() => navigate(note.href)}
@@ -153,7 +153,7 @@ export default function PageSearch({ notes }: PageSearchProps) {
             ))}
           </ul>
         ) : (
-          <p className="px-4 py-3 text-sm text-gray-500">No pages found.</p>
+          <p className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No pages found.</p>
         )}
       </div>
     </div>
