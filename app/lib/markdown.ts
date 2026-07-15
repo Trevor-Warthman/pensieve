@@ -63,6 +63,21 @@ function stripObsidianComments(content: string): string {
   return content.replace(/%%[\s\S]*?%%/g, "");
 }
 
+/** Split raw content into alternating public/secret segments on %%...%% pairs. */
+function splitObsidianComments(content: string): Array<{ secret: boolean; text: string }> {
+  const parts: Array<{ secret: boolean; text: string }> = [];
+  const regex = /%%([\s\S]*?)%%/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > last) parts.push({ secret: false, text: content.slice(last, match.index) });
+    parts.push({ secret: true, text: match[1] });
+    last = match.index + match[0].length;
+  }
+  if (last < content.length) parts.push({ secret: false, text: content.slice(last) });
+  return parts;
+}
+
 /** Remark plugin: convert [[Wikilinks]] → <a> and ![[image.ext]] → <img> */
 const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
   return (tree) => {
@@ -305,12 +320,11 @@ const remarkRewriteAssets: Plugin<[MarkdownOptions], Root> = ({ cloudfrontUrl, s
   };
 };
 
-export async function renderMarkdown(
-  content: string,
-  options: MarkdownOptions
-): Promise<{ html: string; headings: Heading[] }> {
-  const headings: Heading[] = [];
-  const cleaned = stripObsidianComments(content);
+async function runPipeline(
+  text: string,
+  options: MarkdownOptions,
+  headings: Heading[]
+): Promise<string> {
   const result = await unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -324,7 +338,34 @@ export async function renderMarkdown(
     .use(makeRehypeHeadingIds(headings))
     .use(rehypeExternalLinks)
     .use(rehypeStringify)
-    .process(cleaned);
+    .process(text);
+  return String(result);
+}
 
-  return { html: String(result), headings };
+export async function renderMarkdown(
+  content: string,
+  options: MarkdownOptions,
+  { revealSecrets = false }: { revealSecrets?: boolean } = {}
+): Promise<{ html: string; headings: Heading[] }> {
+  const headings: Heading[] = [];
+
+  if (!revealSecrets) {
+    const cleaned = stripObsidianComments(content);
+    const html = await runPipeline(cleaned, options, headings);
+    return { html, headings };
+  }
+
+  // Owner view: render each %%...%% span too, wrapped as a collapsible
+  // "hidden" section instead of being stripped from the page entirely.
+  const segments = splitObsidianComments(content).filter((s) => s.text.trim().length > 0);
+  const htmlParts: string[] = [];
+  for (const segment of segments) {
+    const html = await runPipeline(segment.text, options, headings);
+    htmlParts.push(
+      segment.secret
+        ? `<details class="secret-content"><summary>🔒 Hidden — click to reveal</summary>\n\n${html}\n\n</details>`
+        : html
+    );
+  }
+  return { html: htmlParts.join("\n"), headings };
 }

@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { getLexiconBySlug, lexiconS3Prefix } from "@/lib/db";
 import { getNote, buildBacklinksIndex, getAssetMap } from "@/lib/content";
+import { getUserIdFromToken } from "@/lib/auth";
 import TableOfContents from "@/components/TableOfContents";
 
 interface NotePageProps {
@@ -14,13 +16,17 @@ export default async function NotePage({ params }: NotePageProps) {
   const lexicon = await getLexiconBySlug(lexiconSlug);
   if (!lexicon) notFound();
 
+  const cookieStore = await cookies();
+  const userId = await getUserIdFromToken(cookieStore.get("pensieve_token")?.value);
+  const isOwner = userId !== null && userId === lexicon.userId;
+
   const s3Prefix = lexiconS3Prefix(lexicon);
   const decodedSlug = slug.map((s) => decodeURIComponent(s));
   const [backlinksIndex, assets] = await Promise.all([
     buildBacklinksIndex(s3Prefix),
     getAssetMap(s3Prefix),
   ]);
-  const note = await getNote(s3Prefix, decodedSlug, backlinksIndex, assets, lexiconSlug);
+  const note = await getNote(s3Prefix, decodedSlug, backlinksIndex, assets, lexiconSlug, isOwner);
   if (!note) notFound();
 
   const showToc = note.headings.filter((h) => h.level <= 3).length >= 3;
