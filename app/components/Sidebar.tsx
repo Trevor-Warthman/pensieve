@@ -19,7 +19,7 @@ export interface SidebarProps {
 export default function Sidebar({ lexicon, items, currentPath }: SidebarProps) {
   return (
     <nav
-      className="flex flex-col flex-1"
+      className="flex flex-col flex-1 min-h-0"
       aria-label={`${lexicon} navigation`}
     >
       <div className="px-4 py-5 border-b border-gray-200 dark:border-gray-800">
