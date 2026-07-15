@@ -43,18 +43,26 @@ You should see the app log `[db] created table: pensieve-dev-users` and `[db] cr
 
 ---
 
-## 4. Verify `.env.local`
+## 4. Create `.env.local`
 
-`app/.env.local` should already be committed with local dev values. Confirm it contains:
+`app/.env.local` is gitignored (`.env*.local`), not committed — create it yourself with:
 
 ```
-NEXT_PUBLIC_API_URL=http://localhost:3000/api
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
 AWS_REGION=us-east-1
 DYNAMODB_ENDPOINT=http://localhost:8000
 DYNAMODB_LEXICONS_TABLE=pensieve-dev-lexicons
 DYNAMODB_USERS_TABLE=pensieve-dev-users
 JWT_SECRET=local-dev-secret-change-me
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+AWS_S3_ENDPOINT=http://localhost:9000
+AWS_S3_PUBLIC_ENDPOINT=http://localhost:9000
+AWS_S3_BUCKET=pensieve-local
+NEXT_PUBLIC_CLOUDFRONT_URL=http://localhost:9000/pensieve-local
 ```
+
+The app runs on port **3001**, not 3000 (`npm run dev` / `docker-compose.yml`). `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` must match minio's `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` (`minioadmin`/`minioadmin`) — the app code defaults to `local`/`local` when unset, which minio rejects with `InvalidAccessKeyId`.
 
 ---
 
