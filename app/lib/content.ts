@@ -250,6 +250,7 @@ export async function getNote(
   backlinksIndex?: Map<string, string[]>,
   assets?: Record<string, string>,
   lexiconSlug?: string,
+  revealSecrets = false,
 ): Promise<RenderedNote | null> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   let key = `${prefix}${slugPath.join("/")}.md`;
@@ -301,13 +302,17 @@ export async function getNote(
     }
   }
 
-  const { html, headings } = await renderMarkdown(content, {
-    cloudfrontUrl: CLOUDFRONT_URL,
-    s3Prefix,
-    assets,
-    lexiconSlug,
-    noteSlugMap,
-  });
+  const { html, headings } = await renderMarkdown(
+    content,
+    {
+      cloudfrontUrl: CLOUDFRONT_URL,
+      s3Prefix,
+      assets,
+      lexiconSlug,
+      noteSlugMap,
+    },
+    { revealSecrets }
+  );
 
   const slugStr = slugPath.join("/").toLowerCase();
   const backlinks = backlinksIndex?.get(slugStr) ?? [];

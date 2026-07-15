@@ -22,6 +22,14 @@
 .callout-question { @apply border-pink-300 bg-pink-50 text-pink-800 dark:border-pink-600 dark:bg-pink-950/40 dark:text-pink-200; }
 .callout-quote   { @apply border-gray-300 bg-gray-50 text-gray-600 italic dark:border-gray-600 dark:bg-gray-800/40 dark:text-gray-400; }
 
+/* Owner-only revealed %%...%% sections */
+.secret-content {
+  @apply rounded-lg border border-dashed border-purple-300 bg-purple-50 px-4 py-3 my-4 text-sm dark:border-purple-700 dark:bg-purple-950/30;
+}
+.secret-content > summary {
+  @apply cursor-pointer font-semibold text-purple-700 dark:text-purple-300;
+}
+
 /* Task list checkboxes (GFM - [ ] / - [x] syntax) */
 .prose ul.contains-task-list {
   @apply list-none pl-0;
