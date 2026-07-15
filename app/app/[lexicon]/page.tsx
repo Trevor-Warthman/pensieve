@@ -34,7 +34,7 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
       </div>
 
       {pinnedNotes.length > 0 && (
-        <div className="mb-10">
+        <div className="mb-10" data-testid="pinned-section">
           <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">Pinned</p>
           <ul className="space-y-2">
             {pinnedNotes.map((note) => (
@@ -60,7 +60,7 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
       {notes.length === 0 ? (
         <p className="text-gray-500">No published notes yet.</p>
       ) : unpinnedNotes.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="space-y-2" data-testid="general-list">
           {unpinnedNotes.map((note) => (
             <li key={note.s3Key}>
               <Link
