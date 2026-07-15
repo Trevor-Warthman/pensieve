@@ -4,7 +4,6 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
 import matter from "gray-matter";
 import { renderMarkdown, type Heading } from "./markdown";
 
@@ -74,18 +73,6 @@ async function fetchText(key: string): Promise<string> {
   return await res.Body!.transformToString("utf-8");
 }
 
-/**
- * Cross-request cache for S3 object reads (manifest + per-note markdown).
- * Content only ever changes via an explicit `pensieve sync`, so a short
- * staleness window is free. No incremental-cache backend is wired up for
- * OpenNext, so this only pays off on warm Lambda-container reuse, but that's
- * still the common case for a single visitor clicking through pages.
- */
-const cachedFetchText = unstable_cache(
-  (key: string) => fetchText(key),
-  ["pensieve-s3-object"],
-  { revalidate: 60 }
-);
 
 function keyToSlug(key: string, prefix: string): string[] {
   return key
@@ -105,7 +92,7 @@ function parseYamlPublish(raw: string): boolean | undefined {
 const fetchManifest = cache(async (prefix: string): Promise<Manifest | null> => {
   try {
     const key = `${prefix}_manifest.json`;
-    const raw = await cachedFetchText(key);
+    const raw = await fetchText(key);
     return JSON.parse(raw) as Manifest;
   } catch {
     return null;
@@ -257,7 +244,7 @@ export async function getNote(
 
   let raw: string;
   try {
-    raw = await cachedFetchText(key);
+    raw = await fetchText(key);
   } catch {
     // Fallback: the filename may contain URL-unsafe chars (e.g. '?') that were
     // stripped or mangled by the browser before reaching the server.  Try to
@@ -275,7 +262,7 @@ export async function getNote(
 
     key = `${prefix}${matched.slug}.md`;
     try {
-      raw = await cachedFetchText(key);
+      raw = await fetchText(key);
     } catch {
       return null;
     }
