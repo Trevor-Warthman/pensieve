@@ -27,6 +27,8 @@ export interface NoteMetadata {
   title: string;
   publish: boolean;
   tags: string[];
+  pin: boolean;
+  pinOrder: number | null;
   frontmatter: Record<string, unknown>;
 }
 
@@ -61,7 +63,7 @@ export interface GraphData {
 
 interface Manifest {
   version: number;
-  notes: Array<{ slug: string; title: string; tags: string[]; content?: string }>;
+  notes: Array<{ slug: string; title: string; tags: string[]; content?: string; pin?: boolean; pinOrder?: number }>;
   backlinks: Record<string, string[]>;
   assets?: Record<string, string>; // lowercase basename → relative path
 }
@@ -111,6 +113,8 @@ export const listNotes = cache(async (
       title: n.title,
       publish: true,
       tags: n.tags,
+      pin: n.pin ?? false,
+      pinOrder: n.pinOrder ?? null,
       frontmatter: {},
     }));
   }
@@ -164,6 +168,8 @@ export const listNotes = cache(async (
       slug, s3Key: key,
       title: (data.title as string) ?? slug.at(-1) ?? "Untitled",
       publish, tags: Array.isArray(data.tags) ? data.tags : [],
+      pin: data.pin === true,
+      pinOrder: typeof data.pinOrder === "number" ? data.pinOrder : null,
       frontmatter: data,
     });
   }
@@ -298,6 +304,8 @@ export async function getNote(
     title: (data.title as string) ?? slugPath.at(-1) ?? "Untitled",
     publish: true,
     tags: Array.isArray(data.tags) ? data.tags : [],
+    pin: data.pin === true,
+    pinOrder: typeof data.pinOrder === "number" ? data.pinOrder : null,
     frontmatter: data,
     html,
     headings,

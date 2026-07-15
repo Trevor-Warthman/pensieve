@@ -46,6 +46,8 @@ interface ManifestNote {
   title: string;
   tags: string[];
   content: string; // stripped, truncated body — avoids a per-note S3 fetch to build search indexes
+  pin?: boolean;
+  pinOrder?: number;
 }
 
 /** Strip markdown syntax down to plain text for a search-index excerpt.
@@ -86,7 +88,14 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
       const { data, content } = matter.read(file);
       const title = (data.title as string) ?? slug.split("/").pop() ?? "Untitled";
       const tags = Array.isArray(data.tags) ? (data.tags as string[]) : [];
-      notes.push({ slug, title, tags, content: stripMarkdown(content).slice(0, 500) });
+      const pin = data.pin === true;
+      const pinOrder = typeof data.pinOrder === "number" ? data.pinOrder : undefined;
+      notes.push({
+        slug, title, tags,
+        content: stripMarkdown(content).slice(0, 500),
+        ...(pin && { pin }),
+        ...(pinOrder !== undefined && { pinOrder }),
+      });
       parsed.push({ slug, content });
     } catch {
       // skip unparseable files

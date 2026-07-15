@@ -16,6 +16,16 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
   const notes = await listNotes(lexiconS3Prefix(lexicon));
   notes.sort((a, b) => a.slug.join("/").localeCompare(b.slug.join("/")));
 
+  const pinnedNotes = notes
+    .filter((n) => n.pin)
+    .sort((a, b) => {
+      const orderA = a.pinOrder ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.pinOrder ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.slug.join("/").localeCompare(b.slug.join("/"));
+    });
+  const unpinnedNotes = notes.filter((n) => !n.pin);
+
   return (
     <div className="max-w-4xl mx-auto px-8 py-12">
       <div className="mb-10">
@@ -23,11 +33,35 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
         <h1 className="text-4xl font-bold text-gray-900 dark:text-white">{lexicon.title}</h1>
       </div>
 
+      {pinnedNotes.length > 0 && (
+        <div className="mb-10" data-testid="pinned-section">
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">Pinned</p>
+          <ul className="space-y-2">
+            {pinnedNotes.map((note) => (
+              <li key={note.s3Key}>
+                <Link
+                  href={`/${slug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`}
+                  className="group flex flex-col gap-1 rounded-lg border border-gray-200 dark:border-gray-800 px-5 py-4 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                >
+                  <span className="text-gray-900 dark:text-white font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {note.title}
+                  </span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {note.slug.join("/")}
+                    {note.tags.length > 0 && ` · ${note.tags.join(", ")}`}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {notes.length === 0 ? (
         <p className="text-gray-500">No published notes yet.</p>
-      ) : (
-        <ul className="space-y-2">
-          {notes.map((note) => (
+      ) : unpinnedNotes.length > 0 ? (
+        <ul className="space-y-2" data-testid="general-list">
+          {unpinnedNotes.map((note) => (
             <li key={note.s3Key}>
               <Link
                 href={`/${slug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`}
@@ -44,7 +78,7 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
     </div>
   );
 }

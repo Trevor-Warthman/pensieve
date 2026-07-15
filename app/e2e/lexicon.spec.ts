@@ -35,3 +35,23 @@ test('second note has backlink to index', async ({ page }) => {
   // Backlinks aside should contain a link to "index"
   await expect(page.locator('aside').getByRole('link', { name: 'index' })).toBeVisible();
 });
+
+test('pinned notes show in a Pinned section above the general list, ordered by pinOrder', async ({ page }) => {
+  await page.goto(`/${LEXICON}`);
+
+  const pinnedSection = page.getByTestId('pinned-section');
+  const pinnedLinks = pinnedSection.getByRole('link');
+
+  // pinOrder: 1 before pinOrder: 2, regardless of file/seed order (seeded as second, then first).
+  await expect(pinnedLinks).toHaveText([/Pinned First/, /Pinned Second/]);
+});
+
+test('pinned notes do not also appear in the general list', async ({ page }) => {
+  await page.goto(`/${LEXICON}`);
+
+  const pinnedSection = page.getByTestId('pinned-section');
+  const generalList = page.getByTestId('general-list');
+
+  await expect(pinnedSection.getByRole('link', { name: 'Pinned First' })).toBeVisible();
+  await expect(generalList.getByRole('link', { name: 'Pinned First' })).toHaveCount(0);
+});
