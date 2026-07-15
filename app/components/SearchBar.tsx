@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useCloseDrawer } from "./DrawerContext";
 
 interface PagefindResult {
   url: string;
@@ -22,6 +24,7 @@ export default function SearchBar() {
   const [results, setResults] = useState<PagefindResult[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const closeDrawer = useCloseDrawer();
 
   useEffect(() => {
     if (!query.trim()) {
@@ -77,17 +80,20 @@ export default function SearchBar() {
         <ul className="absolute left-0 right-0 top-full mt-1 z-50 rounded border border-gray-700 bg-gray-900 shadow-lg max-h-72 overflow-y-auto">
           {results.map((r) => (
             <li key={r.url}>
-              <a
+              <Link
                 href={r.url}
                 className="block px-3 py-2 text-sm hover:bg-gray-800 transition-colors"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  setOpen(false);
+                  closeDrawer();
+                }}
               >
                 <div className="text-gray-100 font-medium">{r.meta.title ?? r.url}</div>
                 <div
                   className="text-gray-400 text-xs mt-0.5 line-clamp-2"
                   dangerouslySetInnerHTML={{ __html: r.excerpt }}
                 />
-              </a>
+              </Link>
             </li>
           ))}
         </ul>

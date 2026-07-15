@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useCloseDrawer } from "./DrawerContext";
 
 interface SearchNote {
   title: string;
@@ -25,6 +26,7 @@ export default function PageSearch({ notes }: PageSearchProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const closeDrawer = useCloseDrawer();
 
   const results = filterNotes(notes, query);
 
@@ -37,9 +39,10 @@ export default function PageSearch({ notes }: PageSearchProps) {
   const navigate = useCallback(
     (href: string) => {
       close();
+      closeDrawer();
       router.push(href);
     },
-    [close, router]
+    [close, closeDrawer, router]
   );
 
   useEffect(() => {

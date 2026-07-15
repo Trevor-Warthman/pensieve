@@ -113,7 +113,6 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
 
   return (
     <>
-      <PageSearch notes={searchNotes} />
       <ResponsiveShell
         sidebar={
           <>
@@ -158,6 +157,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
           </>
         }
       >
+        <PageSearch notes={searchNotes} />
         {children}
       </ResponsiveShell>
     </>
