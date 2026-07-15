@@ -35,7 +35,7 @@ export default function ResponsiveShell({ sidebar, children }: ResponsiveShellPr
 
       <div
         className={`
-          w-64 shrink-0 fixed inset-y-0 left-0 z-50 h-screen overflow-y-auto flex flex-col
+          w-64 shrink-0 fixed inset-y-0 left-0 z-50 h-screen flex flex-col
           bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800
           transform transition-transform duration-200 ease-in-out
           md:sticky md:top-0 md:translate-x-0
