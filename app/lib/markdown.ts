@@ -205,6 +205,29 @@ const remarkCallouts: Plugin<[], Root> = () => {
   };
 };
 
+/** Remark plugin: render `dataview` code fences as a "not supported" callout
+ *  instead of dumping the raw query as an inert code block. Pensieve has no
+ *  Dataview query engine, so a dataview block would otherwise just look broken.
+ */
+const remarkDataviewFallback: Plugin<[], Root> = () => {
+  return (tree) => {
+    visit(tree, "code", (node: { lang?: string | null }, index, parent) => {
+      if (node.lang?.toLowerCase() !== "dataview") return;
+      const htmlNode = {
+        type: "html",
+        value:
+          '<div class="callout callout-warning" data-callout="warning">' +
+          '<div class="callout-title">Dataview not supported</div>' +
+          '<div class="callout-body">This note contains a Dataview query, which Pensieve does not run. ' +
+          "The query is hidden here — view it in Obsidian.</div></div>",
+      };
+      if (parent && index !== undefined) {
+        (parent as { children: unknown[] }).children.splice(index, 1, htmlNode as never);
+      }
+    });
+  };
+};
+
 /** Rehype plugin: replace <iframe> embeds with a styled external link card.
  *  Browsers enforce X-Frame-Options / CSP frame-src from the target site;
  *  Electron (Obsidian) ignores those headers, so iframes appear to work there
@@ -257,13 +280,20 @@ function rehypeExternalLinks() {
   };
 }
 
-/** Remark plugin: rewrite relative image/asset paths to CloudFront URLs */
-const remarkRewriteAssets: Plugin<[MarkdownOptions], Root> = ({ cloudfrontUrl, s3Prefix }) => {
+/** Remark plugin: rewrite relative image/asset paths to CloudFront URLs.
+ *  Consults the same asset map as Obsidian ![[embed]] resolution so a
+ *  standard markdown image whose relative path doesn't literally match
+ *  the S3 key layout still resolves (matched by basename), instead of
+ *  silently producing a broken <img src>.
+ */
+const remarkRewriteAssets: Plugin<[MarkdownOptions], Root> = ({ cloudfrontUrl, s3Prefix, assets }) => {
   return (tree) => {
     visit(tree, "image", (node) => {
-      if (!node.url.startsWith("http")) {
-        node.url = `${cloudfrontUrl.replace(/\/$/, "")}/${s3Prefix.replace(/\/$/, "")}/${node.url.replace(/^\//, "")}`;
-      }
+      if (node.url.startsWith("http")) return;
+      const basename = node.url.split("/").pop()!.toLowerCase();
+      const resolvedPath = assets?.[basename] ?? node.url;
+      const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
+      node.url = `${cloudfrontUrl.replace(/\/$/, "")}/${prefix}${resolvedPath.replace(/^\//, "")}`;
     });
   };
 };
@@ -277,6 +307,7 @@ export async function renderMarkdown(
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkCallouts)
+    .use(remarkDataviewFallback)
     .use(remarkWikilinks, options)
     .use(remarkRewriteAssets, options)
     .use(remarkRehype, { allowDangerousHtml: true })

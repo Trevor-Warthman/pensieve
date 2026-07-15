@@ -72,10 +72,26 @@ function getContentType(filePath) {
     };
     return types[ext] ?? "application/octet-stream";
 }
+/** Strip markdown syntax down to plain text for a search-index excerpt.
+ *  Mirrors app/lib/content.ts's stripMarkdown — kept in sync manually since
+ *  the CLI and app are separate packages with no shared lib today.
+ */
+function stripMarkdown(md) {
+    return md
+        .replace(/!\[.*?\]\(.*?\)/g, "")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, "$1")
+        .replace(/#{1,6}\s+/g, "")
+        .replace(/[*_~`]{1,3}/g, "")
+        .replace(/>\s+/g, "")
+        .replace(/\n+/g, " ")
+        .trim();
+}
 function buildManifest(mdFiles, assetFiles, absDir) {
     const wikilinkRegex = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
     const notes = [];
     const backlinks = {};
+    const parsed = [];
     for (const file of mdFiles) {
         const rel = path.relative(absDir, file).replace(/\\/g, "/");
         const slug = rel.replace(/\.md$/, "");
@@ -83,19 +99,35 @@ function buildManifest(mdFiles, assetFiles, absDir) {
             const { data, content } = gray_matter_1.default.read(file);
             const title = data.title ?? slug.split("/").pop() ?? "Untitled";
             const tags = Array.isArray(data.tags) ? data.tags : [];
-            notes.push({ slug, title, tags });
-            wikilinkRegex.lastIndex = 0;
-            let match;
-            while ((match = wikilinkRegex.exec(content)) !== null) {
-                const target = match[1].trim().toLowerCase();
-                if (!backlinks[target])
-                    backlinks[target] = [];
-                if (!backlinks[target].includes(slug))
-                    backlinks[target].push(slug);
-            }
+            notes.push({ slug, title, tags, content: stripMarkdown(content).slice(0, 500) });
+            parsed.push({ slug, content });
         }
         catch {
             // skip unparseable files
+        }
+    }
+    // Obsidian wikilinks are usually bare note names (e.g. [[Hesta]], resolved
+    // by unique filename regardless of folder), not full paths — resolve
+    // through this basename index before falling back to a literal match, or
+    // almost every real-world wikilink misses and backlinks/graph end up
+    // nearly empty despite a densely cross-linked vault.
+    const basenameToSlug = new Map();
+    for (const { slug } of parsed) {
+        const basename = slug.split("/").pop().toLowerCase();
+        if (!basenameToSlug.has(basename))
+            basenameToSlug.set(basename, slug);
+    }
+    for (const { slug, content } of parsed) {
+        wikilinkRegex.lastIndex = 0;
+        let match;
+        while ((match = wikilinkRegex.exec(content)) !== null) {
+            const raw = match[1].trim().toLowerCase();
+            const resolved = basenameToSlug.get(raw.split("/").pop()) ?? raw;
+            const target = resolved.toLowerCase();
+            if (!backlinks[target])
+                backlinks[target] = [];
+            if (!backlinks[target].includes(slug))
+                backlinks[target].push(slug);
         }
     }
     // Build asset lookup: lowercase basename → relative path

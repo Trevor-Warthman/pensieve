@@ -1,5 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { cache } from "react";
 
 const isLocal = !!process.env.DYNAMODB_ENDPOINT;
 const client = DynamoDBDocumentClient.from(
@@ -27,7 +28,7 @@ export interface Lexicon {
 }
 
 /** Resolve a public slug to its S3 prefix (userId/lexiconId). Only returns active lexicons. */
-export async function getLexiconBySlug(slug: string): Promise<Lexicon | null> {
+export const getLexiconBySlug = cache(async (slug: string): Promise<Lexicon | null> => {
   const result = await client.send(
     new ScanCommand({
       TableName: LEXICONS_TABLE,
@@ -37,7 +38,7 @@ export async function getLexiconBySlug(slug: string): Promise<Lexicon | null> {
     })
   );
   return (result.Items?.[0] as Lexicon) ?? null;
-}
+});
 
 export function lexiconS3Prefix(lexicon: Lexicon): string {
   return `${lexicon.userId}/${lexicon.lexiconId}`;

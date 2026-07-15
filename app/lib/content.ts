@@ -61,7 +61,7 @@ export interface GraphData {
 
 interface Manifest {
   version: number;
-  notes: Array<{ slug: string; title: string; tags: string[] }>;
+  notes: Array<{ slug: string; title: string; tags: string[]; content?: string }>;
   backlinks: Record<string, string[]>;
   assets?: Record<string, string>; // lowercase basename → relative path
 }
@@ -305,6 +305,23 @@ export async function getNote(
   };
 }
 
+/** Run `fn` over `items` with at most `limit` in flight at once.
+ *  Unbounded Promise.all over hundreds of notes can overwhelm S3/MinIO
+ *  connection pools and is actually slower than a modest batch size.
+ */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 function stripMarkdown(md: string): string {
   return md
     .replace(/!\[.*?\]\(.*?\)/g, "")
@@ -321,10 +338,28 @@ export async function buildSearchIndex(
   s3Prefix: string,
   publishDefault = true
 ): Promise<SearchEntry[]> {
+  const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const notes = await listNotes(s3Prefix, publishDefault);
-  const entries: SearchEntry[] = [];
 
-  for (const note of notes) {
+  // Manifest (when present) already carries a stripped content excerpt per
+  // note, computed once at sync time — avoids an S3 GET per note on every
+  // /search request, which was the dominant cost on vaults with hundreds
+  // of notes (~800 notes took 10-20s to render search with no caching).
+  const manifest = await fetchManifest(prefix);
+  const manifestContent = new Map<string, string>();
+  if (manifest) {
+    for (const n of manifest.notes) {
+      if (n.content !== undefined) manifestContent.set(n.slug.toLowerCase(), n.content);
+    }
+  }
+
+  return mapWithConcurrency(notes, 20, async (note) => {
+    const slugStr = note.slug.join("/");
+    const cached = manifestContent.get(slugStr.toLowerCase());
+    if (cached !== undefined) {
+      return { title: note.title, slug: slugStr, content: cached, tags: note.tags };
+    }
+
     let rawContent = "";
     try {
       const raw = await fetchText(note.s3Key);
@@ -332,18 +367,23 @@ export async function buildSearchIndex(
       rawContent = stripMarkdown(content).slice(0, 500);
     } catch { /* fall back to empty */ }
 
-    entries.push({ title: note.title, slug: note.slug.join("/"), content: rawContent, tags: note.tags });
-  }
-
-  return entries;
+    return { title: note.title, slug: slugStr, content: rawContent, tags: note.tags };
+  });
 }
 
 export async function buildGraphData(
   s3Prefix: string,
   publishDefault = true
 ): Promise<GraphData> {
+  const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const notes = await listNotes(s3Prefix, publishDefault);
-  const publishedSlugs = new Set(notes.map((n) => n.slug.join("/")));
+
+  // Backlink/wikilink targets are lowercased (case-insensitive matching per
+  // Obsidian convention), but node ids must stay in canonical case since
+  // GraphView navigates via `/${lexiconSlug}/${node.id}`. Resolve through
+  // this lookup before touching nodeMap/edges.
+  const canonicalSlug = new Map<string, string>();
+  for (const n of notes) canonicalSlug.set(n.slug.join("/").toLowerCase(), n.slug.join("/"));
 
   const nodeMap = new Map<string, GraphNode>(
     notes.map((n) => [n.slug.join("/"), { id: n.slug.join("/"), title: n.title, linkCount: 0 }])
@@ -351,24 +391,40 @@ export async function buildGraphData(
 
   const edgeSet = new Set<string>();
   const edges: GraphEdge[] = [];
+
+  function addEdge(sourceRaw: string, targetRaw: string) {
+    const sourceId = canonicalSlug.get(sourceRaw.toLowerCase());
+    const target = canonicalSlug.get(targetRaw.toLowerCase());
+    if (!sourceId || !target || target === sourceId) return;
+    const key = `${sourceId}→${target}`;
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+    edges.push({ source: sourceId, target });
+    nodeMap.get(sourceId)!.linkCount++;
+    nodeMap.get(target)!.linkCount++;
+  }
+
+  const manifest = await fetchManifest(prefix);
+  if (manifest) {
+    // Manifest already encodes backlinks (target -> sources); no per-note S3 fetch needed.
+    for (const [target, sources] of Object.entries(manifest.backlinks)) {
+      for (const source of sources) addEdge(source, target);
+    }
+    return { nodes: Array.from(nodeMap.values()), edges };
+  }
+
+  // Legacy slow path: no manifest, scan every note's raw content for wikilinks.
   const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+  const noteContents = await mapWithConcurrency(notes, 20, async (note) => ({
+    sourceId: note.slug.join("/"),
+    content: (matter(await fetchText(note.s3Key))).content,
+  }));
 
-  for (const note of notes) {
-    const raw = await fetchText(note.s3Key);
-    const { content } = matter(raw);
-    const sourceId = note.slug.join("/");
-
+  for (const { sourceId, content } of noteContents) {
     wikilinkRegex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = wikilinkRegex.exec(content)) !== null) {
-      const target = match[1].trim().toLowerCase();
-      if (!publishedSlugs.has(target) || target === sourceId) continue;
-      const key = `${sourceId}→${target}`;
-      if (edgeSet.has(key)) continue;
-      edgeSet.add(key);
-      edges.push({ source: sourceId, target });
-      nodeMap.get(sourceId)!.linkCount++;
-      nodeMap.get(target)!.linkCount++;
+      addEdge(sourceId, match[1].trim());
     }
   }
 

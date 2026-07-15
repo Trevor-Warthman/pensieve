@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { DrawerContext } from "./DrawerContext";
 
 interface ResponsiveShellProps {
   sidebar: React.ReactNode;
@@ -11,6 +12,7 @@ export default function ResponsiveShell({ sidebar, children }: ResponsiveShellPr
   const [open, setOpen] = useState(false);
 
   return (
+    <DrawerContext.Provider value={() => setOpen(false)}>
     <div className="flex min-h-screen">
       <button
         type="button"
@@ -45,5 +47,6 @@ export default function ResponsiveShell({ sidebar, children }: ResponsiveShellPr
 
       <div className="flex-1 overflow-auto pt-14 md:pt-0">{children}</div>
     </div>
+    </DrawerContext.Provider>
   );
 }

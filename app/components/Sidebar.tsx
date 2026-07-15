@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useCloseDrawer } from "./DrawerContext";
 
 export interface SidebarItem {
   label: string;
@@ -55,6 +57,7 @@ function SidebarNavItem({ item, currentPath, depth }: SidebarNavItemProps) {
   const isFolder = !!item.children && item.children.length > 0;
   const isActive = currentPath === item.href;
   const [expanded, setExpanded] = useState(true);
+  const closeDrawer = useCloseDrawer();
 
   return (
     <li>
@@ -77,8 +80,9 @@ function SidebarNavItem({ item, currentPath, depth }: SidebarNavItemProps) {
           {item.label}
         </button>
       ) : (
-        <a
+        <Link
           href={item.href}
+          onClick={closeDrawer}
           className={`
             flex items-center px-3 py-1.5 rounded text-sm transition-colors
             ${isActive
@@ -89,7 +93,7 @@ function SidebarNavItem({ item, currentPath, depth }: SidebarNavItemProps) {
           style={{ paddingLeft: `${0.75 + depth * 1 + 1.125}rem` }}
         >
           {item.label}
-        </a>
+        </Link>
       )}
       {isFolder && expanded && (
         <ul className="mt-0.5 space-y-0.5">

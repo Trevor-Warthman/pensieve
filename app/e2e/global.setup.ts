@@ -8,7 +8,7 @@
  */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { S3Client, PutObjectCommand, CreateBucketCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, CreateBucketCommand, HeadBucketCommand, PutBucketPolicyCommand } from "@aws-sdk/client-s3";
 
 const DYNAMO_ENDPOINT = process.env.DYNAMODB_ENDPOINT ?? "http://localhost:8000";
 const S3_ENDPOINT = process.env.AWS_S3_ENDPOINT ?? "http://localhost:9000";
@@ -198,14 +198,64 @@ A flat top-level note (not in any folder) to show folders and flat
 notes rendering side by side in the sidebar.
 `,
   },
+  {
+    path: "clade/secret.md",
+    content: `---
+title: Secret Note
+publish: true
+tags: [internal]
+---
+
+# Secret Note
+
+Lives under the "clade" folder, which is hidden from sidebar/search nav
+but still directly reachable by URL.
+`,
+  },
+  {
+    path: "dataview-demo.md",
+    content: `---
+title: Dataview Demo
+publish: true
+tags: [demo]
+---
+
+# Dataview Demo
+
+This note has an unsupported Dataview query below.
+
+\`\`\`dataview
+LIST FROM #guide
+\`\`\`
+`,
+  },
 ];
 
+/** docker-compose's minio-setup service applies a public-download bucket
+ *  policy on first boot, but that only covers the compose-managed path.
+ *  If MinIO's volume is ever fresh and this test setup creates the bucket
+ *  first (e.g. a rebuilt dev stack, CI), the bucket defaults to private
+ *  and every image URL 403s app-wide with no error surfaced anywhere —
+ *  set the same policy here so bucket creation is never silently private.
+ */
 async function ensureBucket() {
   try {
     await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
   } catch {
     await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
   }
+  await s3.send(new PutBucketPolicyCommand({
+    Bucket: BUCKET,
+    Policy: JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [{
+        Effect: "Allow",
+        Principal: { AWS: ["*"] },
+        Action: ["s3:GetObject"],
+        Resource: [`arn:aws:s3:::${BUCKET}/*`],
+      }],
+    }),
+  }));
 }
 
 async function seedDynamo() {

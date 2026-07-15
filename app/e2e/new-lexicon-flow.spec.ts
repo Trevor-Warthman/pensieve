@@ -9,8 +9,6 @@
  */
 import { test, expect } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:3000';
-
 // Generate unique slugs per test run to avoid DynamoDB collisions
 const RUN_ID = Date.now().toString(36);
 const EMAIL = `flow-test-${RUN_ID}@example.com`;

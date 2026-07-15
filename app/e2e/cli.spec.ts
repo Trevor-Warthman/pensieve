@@ -19,9 +19,18 @@ import * as path from 'path';
 import * as os from 'os';
 
 const CLI = path.resolve(__dirname, '../../cli/dist/index.js');
-const CONF_PATH = path.join(os.homedir(), 'Library', 'Preferences', 'pensieve-nodejs', 'config.json');
-const API = 'http://localhost:3000/api';
-const NOTES_DIR = path.resolve(__dirname, '../../../test-markdown');
+// Resolve the same platform-specific path the CLI's own `conf` store
+// (projectName: "pensieve") writes to — hardcoding the macOS path here
+// silently broke this suite on Linux (credentials went to a file the
+// CLI never reads, so `sync` ran unauthenticated and produced no output).
+function resolveConfPath(): string {
+  const cliDir = path.resolve(__dirname, '../../cli');
+  const script = "import Conf from 'conf'; console.log(new Conf({projectName:'pensieve'}).path);";
+  return execSync(`node --input-type=module -e "${script}"`, { cwd: cliDir, encoding: 'utf8' }).trim();
+}
+const CONF_PATH = resolveConfPath();
+const API = 'http://localhost:3001/api';
+const NOTES_DIR = path.resolve(__dirname, 'fixtures/test-markdown');
 
 const RUN_ID = Date.now().toString(36);
 const EMAIL = `cli-e2e-${RUN_ID}@example.com`;
@@ -77,7 +86,7 @@ test.describe('CLI sync flow', () => {
     const output = execSync(`node ${CLI} sync ${NOTES_DIR} --lexicon ${SLUG}`, { encoding: 'utf8' });
 
     expect(output).toContain('uploaded');
-    expect(output).toMatch(/5 uploaded/);
+    expect(output).toMatch(/6 uploaded/);
 
     // Lexicon index loads
     await page.goto(`/${SLUG}`);
