@@ -56,6 +56,13 @@ function makeRehypeHeadingIds(collected: Heading[]) {
 const IMAGE_EXTS = /\.(png|jpe?g|gif|svg|webp|avif|mp4|pdf)$/i;
 const AUDIO_EXTS = /\.(mp3|wav|m4a|ogg|flac|aac|weba|opus)$/i;
 
+/** Strip Obsidian %%...%% comments before parsing, same as Obsidian's own
+ *  Reading view hides them. Works for both inline (%%secret%%) and block
+ *  (%%\nsecret\n%%) usage since both are just paired delimiters in the raw text. */
+function stripObsidianComments(content: string): string {
+  return content.replace(/%%[\s\S]*?%%/g, "");
+}
+
 /** Remark plugin: convert [[Wikilinks]] → <a> and ![[image.ext]] → <img> */
 const remarkWikilinks: Plugin<[MarkdownOptions], Root> = (options) => {
   return (tree) => {
@@ -303,6 +310,7 @@ export async function renderMarkdown(
   options: MarkdownOptions
 ): Promise<{ html: string; headings: Heading[] }> {
   const headings: Heading[] = [];
+  const cleaned = stripObsidianComments(content);
   const result = await unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -316,7 +324,7 @@ export async function renderMarkdown(
     .use(makeRehypeHeadingIds(headings))
     .use(rehypeExternalLinks)
     .use(rehypeStringify)
-    .process(content);
+    .process(cleaned);
 
   return { html: String(result), headings };
 }
