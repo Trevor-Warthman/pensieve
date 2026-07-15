@@ -140,7 +140,17 @@ jobs:
         env:
           ASSETS_BUCKET: ${{ steps.tf-outputs.outputs.app_assets_bucket }}
         run: |
-          aws s3 sync app/.open-next/assets "s3://${ASSETS_BUCKET}/_assets" --delete
+          # Hashed build output (_next/static/*) never changes for a given filename,
+          # so it's safe to cache forever. Everything else (public/ files, no hash)
+          # gets a short cache so updates show up promptly. --exclude/--include are
+          # symmetric between the two passes, so --delete on each only considers its
+          # own subset — neither pass can delete files owned by the other.
+          aws s3 sync app/.open-next/assets "s3://${ASSETS_BUCKET}/_assets" --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "*" --include "_next/static/*"
+          aws s3 sync app/.open-next/assets "s3://${ASSETS_BUCKET}/_assets" --delete \
+            --cache-control "public,max-age=0,must-revalidate" \
+            --exclude "_next/static/*"
 
       # ── 10. Invalidate CloudFront cache ────────────────────────────────────
       - name: Invalidate CloudFront cache
