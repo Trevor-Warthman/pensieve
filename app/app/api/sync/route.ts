@@ -57,8 +57,12 @@ export async function POST(req: NextRequest) {
   const userId = getUserId(req);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { lexiconSlug?: string; files?: Array<{ path: string; contentType?: string }> };
-  const { lexiconSlug, files } = body;
+  const body = await req.json() as {
+    lexiconSlug?: string;
+    files?: Array<{ path: string; contentType?: string }>;
+    allPaths?: string[];
+  };
+  const { lexiconSlug, files, allPaths } = body;
 
   if (!lexiconSlug || !Array.isArray(files)) {
     return NextResponse.json({ error: "lexiconSlug and files[] required" }, { status: 400 });
@@ -110,19 +114,23 @@ export async function POST(req: NextRequest) {
   } while (token);
 
   // Delete objects that dropped out of the publishable set (unpublished,
-  // renamed, or deleted locally) — the client only sends currently-publishable
-  // files, so anything in `existing` but absent from the request is orphaned
-  // and must not stay servable.
-  const sentPaths = new Set(files.map((f) => f.path));
-  const orphanedKeys = Object.keys(existing).filter((relPath) => !sentPaths.has(relPath));
-  for (let i = 0; i < orphanedKeys.length; i += 1000) {
-    const batch = orphanedKeys.slice(i, i + 1000);
-    await s3.send(new DeleteObjectsCommand({
-      Bucket: BUCKET,
-      Delete: { Objects: batch.map((relPath) => ({ Key: `${prefix}/${relPath}` })) },
-    }));
+  // renamed, or deleted locally). `allPaths` carries the *complete* set for
+  // this sync on every chunked request (files[] is just this chunk's slice) --
+  // diffing against files[] alone would treat every other chunk's paths as
+  // orphaned and delete them. Older CLI versions that don't send allPaths
+  // skip deletion entirely rather than risk deleting the wrong things.
+  if (allPaths) {
+    const sentPaths = new Set(allPaths);
+    const orphanedKeys = Object.keys(existing).filter((relPath) => !sentPaths.has(relPath));
+    for (let i = 0; i < orphanedKeys.length; i += 1000) {
+      const batch = orphanedKeys.slice(i, i + 1000);
+      await s3.send(new DeleteObjectsCommand({
+        Bucket: BUCKET,
+        Delete: { Objects: batch.map((relPath) => ({ Key: `${prefix}/${relPath}` })) },
+      }));
+    }
+    for (const relPath of orphanedKeys) delete existing[relPath];
   }
-  for (const relPath of orphanedKeys) delete existing[relPath];
 
   return NextResponse.json({ uploadUrls, existing });
 }
