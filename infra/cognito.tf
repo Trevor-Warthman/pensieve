@@ -31,4 +31,17 @@ resource "aws_cognito_user_pool_client" "cli" {
   ]
 
   generate_secret = false
+
+  # AWS defaults are 1h access/id tokens, forcing a full interactive
+  # device-flow relogin roughly hourly since nothing in the CLI actually
+  # calls REFRESH_TOKEN_AUTH with the refresh_token it already stores.
+  # Bumped to 24h so a relogin is needed at most once/day.
+  access_token_validity  = 24
+  id_token_validity      = 24
+  refresh_token_validity = 30
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
 }
