@@ -143,6 +143,7 @@ async function requestUploadUrlsChunk(
   accessToken: string,
   lexiconSlug: string,
   fileList: Array<{ path: string; contentType?: string }>,
+  allPaths: string[],
 ): Promise<SyncResponse> {
   const res = await fetch(`${apiEndpoint}/sync`, {
     method: "POST",
@@ -150,7 +151,10 @@ async function requestUploadUrlsChunk(
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ lexiconSlug, files: fileList }),
+    // allPaths carries the *complete* publishable set on every chunk request —
+    // orphan-deletion on the server must diff against the whole sync, not just
+    // this chunk's slice, or each chunk deletes what earlier/later chunks own.
+    body: JSON.stringify({ lexiconSlug, files: fileList, allPaths }),
   });
 
   if (res.status === 401) {
@@ -176,14 +180,16 @@ async function requestUploadUrls(
   lexiconSlug: string,
   fileList: Array<{ path: string; contentType?: string }>,
 ): Promise<SyncResponse> {
+  const allPaths = fileList.map((f) => f.path);
+
   if (fileList.length <= SYNC_CHUNK_SIZE) {
-    return requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList);
+    return requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList, allPaths);
   }
 
   const combined: SyncResponse = { uploadUrls: [], existing: {} };
   for (let i = 0; i < fileList.length; i += SYNC_CHUNK_SIZE) {
     const chunk = fileList.slice(i, i + SYNC_CHUNK_SIZE);
-    const result = await requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, chunk);
+    const result = await requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, chunk, allPaths);
     combined.uploadUrls.push(...result.uploadUrls);
     Object.assign(combined.existing, result.existing);
   }
