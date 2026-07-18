@@ -147,14 +147,17 @@ function buildManifest(mdFiles, assetFiles, absDir) {
     return { version: 1, generatedAt: new Date().toISOString(), notes, backlinks, assets };
 }
 const SYNC_CHUNK_SIZE = 200;
-async function requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList) {
+async function requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList, allPaths) {
     const res = await fetch(`${apiEndpoint}/sync`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ lexiconSlug, files: fileList }),
+        // allPaths carries the *complete* publishable set on every chunk request —
+        // orphan-deletion on the server must diff against the whole sync, not just
+        // this chunk's slice, or each chunk deletes what earlier/later chunks own.
+        body: JSON.stringify({ lexiconSlug, files: fileList, allPaths }),
     });
     if (res.status === 401) {
         throw new Error("UNAUTHORIZED");
@@ -174,13 +177,14 @@ async function requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fil
     return res.json();
 }
 async function requestUploadUrls(apiEndpoint, accessToken, lexiconSlug, fileList) {
+    const allPaths = fileList.map((f) => f.path);
     if (fileList.length <= SYNC_CHUNK_SIZE) {
-        return requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList);
+        return requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, fileList, allPaths);
     }
     const combined = { uploadUrls: [], existing: {} };
     for (let i = 0; i < fileList.length; i += SYNC_CHUNK_SIZE) {
         const chunk = fileList.slice(i, i + SYNC_CHUNK_SIZE);
-        const result = await requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, chunk);
+        const result = await requestUploadUrlsChunk(apiEndpoint, accessToken, lexiconSlug, chunk, allPaths);
         combined.uploadUrls.push(...result.uploadUrls);
         Object.assign(combined.existing, result.existing);
     }
