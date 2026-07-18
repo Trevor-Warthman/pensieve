@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -97,6 +97,21 @@ export const handler = async (
     }
     token = list.NextContinuationToken;
   } while (token);
+
+  // Delete objects that dropped out of the publishable set (unpublished,
+  // renamed, or deleted locally) — the client only sends currently-publishable
+  // files, so anything in `existing` but absent from the request is orphaned
+  // and must not stay servable.
+  const sentPaths = new Set(files.map((f) => f.path));
+  const orphanedKeys = Object.keys(existing).filter((relPath) => !sentPaths.has(relPath));
+  for (let i = 0; i < orphanedKeys.length; i += 1000) {
+    const batch = orphanedKeys.slice(i, i + 1000);
+    await s3.send(new DeleteObjectsCommand({
+      Bucket: BUCKET,
+      Delete: { Objects: batch.map((relPath) => ({ Key: `${prefix}/${relPath}` })) },
+    }));
+  }
+  for (const relPath of orphanedKeys) delete existing[relPath];
 
   return respond(200, { uploadUrls: urls, existing });
 };
