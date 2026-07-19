@@ -83,7 +83,7 @@ test.describe('CLI sync flow', () => {
   });
 
   test('sync uploads notes and they render in the browser', async ({ page }) => {
-    const output = execSync(`node ${CLI} sync ${NOTES_DIR} --lexicon ${SLUG}`, { encoding: 'utf8' });
+    const output = execSync(`node ${CLI} sync ${NOTES_DIR} --lexicon ${SLUG} --yes`, { encoding: 'utf8' });
 
     expect(output).toContain('uploaded');
     expect(output).toMatch(/6 uploaded/);
@@ -101,7 +101,7 @@ test.describe('CLI sync flow', () => {
   });
 
   test('re-sync skips unchanged files', () => {
-    const output = execSync(`node ${CLI} sync ${NOTES_DIR} --lexicon ${SLUG}`, { encoding: 'utf8' });
+    const output = execSync(`node ${CLI} sync ${NOTES_DIR} --lexicon ${SLUG} --yes`, { encoding: 'utf8' });
     expect(output).toContain('0 uploaded');
     expect(output).toContain('unchanged');
   });
