@@ -42,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     publishDefault?: boolean;
     slug?: string;
     password?: string | null;
+    sortOrder?: number;
   };
 
   // Validate individual fields
@@ -111,6 +112,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       names["#passwordHash"] = "passwordHash";
       values[":passwordHash"] = `${salt}:${hash}`;
     }
+  }
+  if (body.sortOrder !== undefined) {
+    sets.push("#sortOrder = :sortOrder");
+    names["#sortOrder"] = "sortOrder";
+    values[":sortOrder"] = body.sortOrder;
   }
 
   if (sets.length === 0 && removes.length === 0) {
