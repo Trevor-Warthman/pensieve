@@ -5,9 +5,10 @@ import Sidebar, { type SidebarItem } from "./Sidebar";
 interface SidebarWrapperProps {
   lexicon: string;
   items: SidebarItem[];
+  bookmarkItems?: SidebarItem[];
 }
 
-export default function SidebarWrapper({ lexicon, items }: SidebarWrapperProps) {
+export default function SidebarWrapper({ lexicon, items, bookmarkItems }: SidebarWrapperProps) {
   const currentPath = usePathname();
-  return <Sidebar lexicon={lexicon} items={items} currentPath={currentPath} />;
+  return <Sidebar lexicon={lexicon} items={items} bookmarkItems={bookmarkItems} currentPath={currentPath} />;
 }

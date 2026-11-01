@@ -29,6 +29,8 @@ export interface NoteMetadata {
   tags: string[];
   pin: boolean;
   pinOrder: number | null;
+  bookmark: boolean;
+  bookmarkFolder: string | null;
   frontmatter: Record<string, unknown>;
 }
 
@@ -63,9 +65,16 @@ export interface GraphData {
 
 interface Manifest {
   version: number;
-  notes: Array<{ slug: string; title: string; tags: string[]; content?: string; pin?: boolean; pinOrder?: number }>;
+  notes: Array<{ slug: string; title: string; tags: string[]; content?: string; pin?: boolean; pinOrder?: number; bookmark?: boolean; bookmarkFolder?: string }>;
   backlinks: Record<string, string[]>;
   assets?: Record<string, string>; // lowercase basename → relative path
+}
+
+/** `bookmark: true` marks a note; `bookmark-folder` only applies when bookmark is true. */
+function bookmarkFields(data: Record<string, unknown>): { bookmark: boolean; bookmarkFolder: string | null } {
+  const bookmark = data.bookmark === true;
+  const folder = data["bookmark-folder"];
+  return { bookmark, bookmarkFolder: bookmark && typeof folder === "string" && folder.trim() ? folder.trim() : null };
 }
 
 async function fetchText(key: string): Promise<string> {
@@ -116,6 +125,8 @@ export const listNotes = cache(async (
       tags: n.tags,
       pin: n.pin ?? false,
       pinOrder: n.pinOrder ?? null,
+      bookmark: n.bookmark ?? false,
+      bookmarkFolder: n.bookmark ? n.bookmarkFolder ?? null : null,
       frontmatter: {},
     }));
   }
@@ -171,6 +182,7 @@ export const listNotes = cache(async (
       publish, tags: Array.isArray(data.tags) ? data.tags : [],
       pin: data.pin === true,
       pinOrder: typeof data.pinOrder === "number" ? data.pinOrder : null,
+      ...bookmarkFields(data),
       frontmatter: data,
     });
   }
@@ -312,6 +324,7 @@ export async function getNote(
     tags: Array.isArray(data.tags) ? data.tags : [],
     pin: data.pin === true,
     pinOrder: typeof data.pinOrder === "number" ? data.pinOrder : null,
+    ...bookmarkFields(data),
     frontmatter: data,
     html,
     headings,

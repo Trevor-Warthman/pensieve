@@ -8,6 +8,7 @@ import PageSearch from "@/components/PageSearch";
 import PageSearchTrigger from "@/components/PageSearchTrigger";
 import ResponsiveShell from "@/components/ResponsiveShell";
 import { type SidebarItem } from "@/components/Sidebar";
+import { buildBookmarkTree } from "@/lib/bookmarks";
 import { getLexiconBySlug, lexiconS3Prefix } from "@/lib/db";
 import { listNotes } from "@/lib/content";
 
@@ -106,6 +107,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
 
   const notes = await listNotes(lexiconS3Prefix(lexicon), lexicon.publishDefault);
   const sidebarItems = buildSidebarTree(notes, slug);
+  const bookmarkItems = buildBookmarkTree(filterHiddenFolders(notes), slug);
   const searchNotes = filterHiddenFolders(notes).map((n) => ({
     title: n.title,
     href: `/${slug}/${n.slug.map((s) => encodeURIComponent(s)).join("/")}`,
@@ -120,7 +122,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
               <SearchBar />
               <PageSearchTrigger />
             </div>
-            <SidebarWrapper lexicon={lexicon.title} items={sidebarItems} />
+            <SidebarWrapper lexicon={lexicon.title} items={sidebarItems} bookmarkItems={bookmarkItems} />
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 space-y-1 shrink-0">
               <Link
                 href={`/${slug}/tags`}

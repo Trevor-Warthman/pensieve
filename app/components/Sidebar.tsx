@@ -13,6 +13,8 @@ export interface SidebarItem {
 export interface SidebarProps {
   lexicon: string;
   items: SidebarItem[];
+  /** Author-set bookmarks (frontmatter `bookmark` + `bookmark-folder`); the tab only shows when non-empty. */
+  bookmarkItems?: SidebarItem[];
   currentPath?: string;
 }
 
@@ -26,8 +28,11 @@ function collectFolderHrefs(items: SidebarItem[], acc: string[] = []): string[] 
   return acc;
 }
 
-export default function Sidebar({ lexicon, items, currentPath }: SidebarProps) {
+export default function Sidebar({ lexicon, items: allItems, bookmarkItems = [], currentPath }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [tab, setTab] = useState<"notes" | "bookmarks">("notes");
+  const hasBookmarks = bookmarkItems.length > 0;
+  const items = tab === "bookmarks" && hasBookmarks ? bookmarkItems : allItems;
   const folderHrefs = useMemo(() => collectFolderHrefs(items), [items]);
 
   function toggleFolder(href: string) {
@@ -75,6 +80,26 @@ export default function Sidebar({ lexicon, items, currentPath }: SidebarProps) {
           </div>
         )}
       </div>
+      {hasBookmarks && (
+        <div role="tablist" aria-label="Sidebar view" className="flex border-b border-gray-200 dark:border-gray-800 text-xs">
+          {(["notes", "bookmarks"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`flex-1 px-3 py-2 capitalize transition-colors ${
+                tab === t
+                  ? "text-amber-800 dark:text-amber-300 border-b-2 border-amber-500 font-medium"
+                  : "text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-300"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto py-4">
         {items.length === 0 ? (
           <p className="px-4 text-sm text-gray-400 dark:text-gray-600">No notes yet.</p>
