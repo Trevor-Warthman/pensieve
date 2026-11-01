@@ -239,9 +239,19 @@ Examples:
     }
 
     // ── Verify auth before scanning ──────────────────────────────────────────
-    const authCheck = await fetch(`${apiEndpoint}/users/me`, {
+    let authCheck = await fetch(`${apiEndpoint}/users/me`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     }).catch(() => null);
+    if (authCheck?.status === 401) {
+      const { refreshAccessToken } = await import("../lib/refresh");
+      const fresh = await refreshAccessToken();
+      if (fresh) {
+        accessToken = fresh;
+        authCheck = await fetch(`${apiEndpoint}/users/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }).catch(() => null);
+      }
+    }
     if (!authCheck || authCheck.status === 401) {
       console.error(chalk.red("Not logged in or session expired. Run `pensieve login` first."));
       process.exitCode = 1; return;

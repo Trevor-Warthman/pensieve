@@ -16,7 +16,7 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE = process.env.DYNAMODB_DEVICE_CODES_TABLE!;
 const APP_URL = process.env.APP_URL!;
 
-const EXPIRES_IN = 600; // seconds
+const EXPIRES_IN = 1800; // seconds (30 min: 10 min was too short to act on from a phone)
 const INTERVAL = 5; // seconds
 const USER_CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // no 0/O/1/I/L
 
