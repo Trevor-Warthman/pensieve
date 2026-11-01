@@ -126,6 +126,7 @@ pensieve config init --from-terraform     # Reload config from Terraform outputs
 ## Concepts
 
 - **Lexicon** — a user's collection of published notes (a blog, a wiki, a DnD campaign site). One user can have many Lexicons.
+- **Bookmarks** — author-set, visible to every reader in a Bookmarks tab in the sidebar. Frontmatter: `bookmark: true` marks a note; `bookmark-folder: Dinner/Chicken` nests it in folders (slash-separated). `bookmark-folder` is ignored unless `bookmark` is true. The tab only appears when the lexicon has bookmarks. Needs `pensieve-markdown` >= 0.3.0 to sync.
 - **Publish flag** — frontmatter field (`publish: true/false`) controlling per-file visibility. Folders have defaults, files can override.
 
 ## Use Cases

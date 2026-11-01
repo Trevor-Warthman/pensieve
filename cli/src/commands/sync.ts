@@ -48,6 +48,8 @@ interface ManifestNote {
   content: string; // stripped, truncated body — avoids a per-note S3 fetch to build search indexes
   pin?: boolean;
   pinOrder?: number;
+  bookmark?: boolean;
+  bookmarkFolder?: string; // nested with "/"; ignored unless bookmark is true
 }
 
 /** Strip markdown syntax down to plain text for a search-index excerpt.
@@ -90,11 +92,16 @@ function buildManifest(mdFiles: string[], assetFiles: string[], absDir: string):
       const tags = Array.isArray(data.tags) ? (data.tags as string[]) : [];
       const pin = data.pin === true;
       const pinOrder = typeof data.pinOrder === "number" ? data.pinOrder : undefined;
+      const bookmark = data.bookmark === true;
+      const bookmarkFolder = bookmark && typeof data["bookmark-folder"] === "string" && data["bookmark-folder"].trim()
+        ? (data["bookmark-folder"] as string).trim() : undefined;
       notes.push({
         slug, title, tags,
         content: stripMarkdown(content).slice(0, 500),
         ...(pin && { pin }),
         ...(pinOrder !== undefined && { pinOrder }),
+        ...(bookmark && { bookmark }),
+        ...(bookmarkFolder && { bookmarkFolder }),
       });
       parsed.push({ slug, content });
     } catch {
