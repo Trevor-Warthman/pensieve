@@ -101,12 +101,12 @@ export default function PageSearch({ notes }: PageSearchProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/50"
+      className="fixed inset-0 z-[60] flex items-start justify-center px-3 pt-[max(4rem,env(safe-area-inset-top))] sm:pt-[20vh] bg-black/50"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="w-full max-w-lg mx-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+      <div className="w-full max-w-lg rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <svg
             className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"
@@ -128,9 +128,9 @@ export default function PageSearch({ notes }: PageSearchProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Jump to page…"
-            className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
           />
-          <kbd className="text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5">
+          <kbd className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5">
             esc
           </kbd>
         </div>

@@ -7,8 +7,8 @@ export default function PageSearchTrigger() {
       onClick={() => document.dispatchEvent(new CustomEvent("pensieve:opensearch"))}
       aria-label="Open page search (⌘K)"
     >
-      <span>Jump to page…</span>
-      <kbd className="font-sans text-[10px] border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5">⌘K</kbd>
+      <span className="min-w-0 truncate">Jump to page…</span>
+      <kbd className="hidden sm:inline font-sans text-[10px] border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 shrink-0">⌘K</kbd>
     </button>
   );
 }

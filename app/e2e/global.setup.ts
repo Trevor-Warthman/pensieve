@@ -162,6 +162,8 @@ Covers login flows. See also [[api/overview]].
     content: `---
 title: Pancakes
 publish: true
+bookmark: true
+bookmark-folder: Breakfast/Favorites
 tags: [recipe]
 ---
 
