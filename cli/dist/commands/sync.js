@@ -101,11 +101,16 @@ function buildManifest(mdFiles, assetFiles, absDir) {
             const tags = Array.isArray(data.tags) ? data.tags : [];
             const pin = data.pin === true;
             const pinOrder = typeof data.pinOrder === "number" ? data.pinOrder : undefined;
+            const bookmark = data.bookmark === true;
+            const bookmarkFolder = bookmark && typeof data["bookmark-folder"] === "string" && data["bookmark-folder"].trim()
+                ? data["bookmark-folder"].trim() : undefined;
             notes.push({
                 slug, title, tags,
                 content: stripMarkdown(content).slice(0, 500),
                 ...(pin && { pin }),
                 ...(pinOrder !== undefined && { pinOrder }),
+                ...(bookmark && { bookmark }),
+                ...(bookmarkFolder && { bookmarkFolder }),
             });
             parsed.push({ slug, content });
         }
