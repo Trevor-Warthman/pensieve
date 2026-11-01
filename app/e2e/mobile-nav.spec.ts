@@ -18,6 +18,26 @@ test('mobile nav drawer closes after clicking a note link', async ({ page }) => 
   await expect(page.locator('[aria-hidden="true"].fixed.inset-0')).toHaveCount(0);
 });
 
+test('mobile drawer exposes bookmarks and jump-to-page controls do not overlap', async ({ page }) => {
+  await page.goto(`/${LEXICON}/index`);
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+
+  const search = page.getByRole('button', { name: /Open page search/i });
+  const drawer = page.getByRole('navigation', { name: /navigation/i });
+  await expect(search).toBeVisible();
+  await expect(search.getByText('⌘K')).toBeHidden();
+  const [searchBox, drawerBox] = await Promise.all([search.boundingBox(), drawer.boundingBox()]);
+  expect(searchBox).not.toBeNull();
+  expect(drawerBox).not.toBeNull();
+  expect(searchBox!.x).toBeGreaterThanOrEqual(drawerBox!.x);
+  expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(drawerBox!.x + drawerBox!.width);
+
+  const bookmarks = page.getByRole('tab', { name: 'bookmarks' });
+  await expect(bookmarks).toBeVisible();
+  await bookmarks.click();
+  await expect(page.getByRole('link', { name: 'Pancakes' })).toBeVisible();
+});
+
 test('mobile nav drawer closes after selecting a jump-to-page (Cmd+K) result via Enter', async ({ page }) => {
   await page.goto(`/${LEXICON}/index`);
 
