@@ -12,6 +12,7 @@ interface Lexicon {
   createdAt: string;
   description?: string;
   passwordHash?: string;
+  sortOrder?: number;
 }
 
 type View = "list" | "create" | "success" | { settings: string };
@@ -220,7 +221,7 @@ function LexiconList({
     <div className="space-y-3">
       {actionError && <p className="text-sm text-red-500">{actionError}</p>}
       <ul className="space-y-3">
-        {lexicons.map((lex) => {
+        {[...lexicons].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map((lex) => {
           const isUnpublished = (lex.status ?? "active") === "unpublished";
           const isBusy = pendingId === lex.lexiconId;
           return (
@@ -310,6 +311,7 @@ function LexiconSettings({
   const [description, setDescription] = useState(lexicon.description ?? "");
   const [slug, setSlug] = useState(lexicon.slug);
   const [publishDefault, setPublishDefault] = useState(lexicon.publishDefault);
+  const [sortOrder, setSortOrder] = useState<string>(lexicon.sortOrder?.toString() ?? "");
   const [password, setPassword] = useState("");
   const [clearPassword, setClearPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -334,6 +336,7 @@ function LexiconSettings({
     if (slug !== lexicon.slug) body.slug = slug;
     if (clearPassword) body.password = null;
     else if (password) body.password = password;
+    if (sortOrder !== "") body.sortOrder = parseInt(sortOrder, 10);
 
     try {
       const res = await fetch(`${apiBase}/lexicons/${lexicon.lexiconId}`, {
@@ -411,6 +414,18 @@ function LexiconSettings({
         <label htmlFor="publishDefault" className="text-sm text-gray-600 dark:text-gray-400">
           Publish notes by default (can override with <code className="text-xs">publish: false</code> frontmatter)
         </label>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-gray-600 dark:text-gray-400">Sort order</label>
+        <input
+          type="number"
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value)}
+          placeholder="0"
+          className="w-24 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-gray-400 dark:focus:border-gray-500"
+        />
+        <p className="text-xs text-gray-400 dark:text-gray-500">Lower numbers appear first in the dashboard.</p>
       </div>
 
       <div className="space-y-2 border-t border-gray-100 dark:border-gray-800 pt-5">

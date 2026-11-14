@@ -25,6 +25,7 @@ export interface Lexicon {
   createdAt: string;
   description?: string;
   passwordHash?: string;
+  sortOrder?: number;
 }
 
 /** Resolve a public slug to its S3 prefix (userId/lexiconId). Only returns active lexicons. */
