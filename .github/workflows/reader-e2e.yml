@@ -1,0 +1,56 @@
+name: Reader E2E
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/reader-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  reader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      DYNAMODB_ENDPOINT: http://127.0.0.1:8000
+      DYNAMODB_LEXICONS_TABLE: pensieve-dev-lexicons
+      DYNAMODB_USERS_TABLE: pensieve-dev-users
+      AWS_S3_ENDPOINT: http://127.0.0.1:9004
+      AWS_S3_BUCKET: pensieve-local
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      JWT_SECRET: fixture-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start local DynamoDB and S3 emulators
+        run: |
+          docker compose up -d dynamodb-local
+          python -m pip install 'moto[server]==5.1.15'
+          moto_server -H 127.0.0.1 -p 9004 > /tmp/pensieve-moto.log 2>&1 &
+          curl --retry 30 --retry-connrefused --retry-delay 1 -sS -o /dev/null "$DYNAMODB_ENDPOINT"
+          curl --retry 30 --retry-connrefused --retry-delay 1 -sS -o /dev/null "$AWS_S3_ENDPOINT"
+      - name: Build and test the reader
+        working-directory: app
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+          npx playwright install --with-deps chromium
+          PENSIEVE_E2E_PRODUCTION=1 npx playwright test --workers=2 --reporter=line e2e/reader-quality.spec.ts e2e/mobile-nav.spec.ts e2e/sidebar-folders.spec.ts e2e/lexicon.spec.ts e2e/feature-fidelity.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: reader-test-results
+          path: app/test-results
+          if-no-files-found: ignore

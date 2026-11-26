@@ -36,6 +36,16 @@ const TEST_USER_ID = "test-user-id";
 const TEST_LEXICON_ID = "test-lexicon-id";
 const TEST_LEXICON_SLUG = "test-lexicon";
 const S3_PREFIX = `${TEST_USER_ID}/${TEST_LEXICON_ID}`;
+const MANIFEST_LEXICON = "manifest-lexicon";
+const MANIFEST_PREFIX = `${TEST_USER_ID}/${MANIFEST_LEXICON}`;
+const MANIFEST_NOTE = `---
+title: Reading Notes
+publish: true
+tags: [fieldwork]
+---
+
+We recorded a meridian crossing. %%fixture-not-in-search%%
+`;
 
 const TEST_NOTES = [
   {
@@ -171,6 +181,17 @@ tags: [recipe]
 
 A third top-level folder, unrelated to the others, to show the sidebar
 handling several independent folder trees at once.
+`,
+  },
+  {
+    path: "deep/reference/100% ready #1.md",
+    content: `---
+title: 100% Ready
+publish: true
+tags: [checklist]
+---
+
+A readiness checklist for winter travel.
 `,
   },
   {
@@ -323,8 +344,26 @@ async function seedMinIO() {
   }
 }
 
+async function seedManifestLexicon() {
+  await dynamo.send(new PutCommand({ TableName: LEXICONS_TABLE, Item: {
+    lexiconId: MANIFEST_LEXICON, userId: TEST_USER_ID, slug: MANIFEST_LEXICON,
+    title: "Manifest Lexicon", publishDefault: false, status: "active", createdAt: new Date().toISOString(),
+  } }));
+  const objects = {
+    "reading.md": MANIFEST_NOTE,
+    "old.md": "---\ntitle: Old Note\n---\n\nNo longer in the published manifest.",
+    "_manifest.json": JSON.stringify({ version: 1, notes: [{
+      title: "Reading Notes", slug: "reading", tags: ["fieldwork"],
+      content: "We recorded a meridian crossing. %%fixture-not-in-search%%",
+    }], backlinks: {}, assets: {} }),
+  };
+  await Promise.all(Object.entries(objects).map(([path, Body]) => s3.send(new PutObjectCommand({
+    Bucket: BUCKET, Key: `${MANIFEST_PREFIX}/${path}`, Body,
+  }))));
+}
+
 export default async function globalSetup() {
   await ensureBucket();
-  await Promise.all([seedDynamo(), seedMinIO()]);
+  await Promise.all([seedDynamo(), seedMinIO(), seedManifestLexicon()]);
   console.log(`\n[setup] Seeded DynamoDB + MinIO for test lexicon "/${TEST_LEXICON_SLUG}"\n`);
 }

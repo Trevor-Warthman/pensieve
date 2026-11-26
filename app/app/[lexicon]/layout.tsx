@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { createHmac } from "node:crypto";
-import SearchBar from "@/components/SearchBar";
 import SidebarWrapper from "@/components/SidebarWrapper";
 import PageSearch from "@/components/PageSearch";
 import PageSearchTrigger from "@/components/PageSearchTrigger";
@@ -10,7 +9,8 @@ import ResponsiveShell from "@/components/ResponsiveShell";
 import { type SidebarItem } from "@/components/Sidebar";
 import { buildBookmarkTree } from "@/lib/bookmarks";
 import { getLexiconBySlug, lexiconS3Prefix } from "@/lib/db";
-import { listNotes } from "@/lib/content";
+import { listNotes, isReaderVisible } from "@/lib/content";
+import { noteHref } from "@/lib/reader-search";
 
 interface LexiconLayoutProps {
   children: React.ReactNode;
@@ -39,15 +39,6 @@ function verifyLexiconToken(token: string | undefined, slug: string, secret: str
   }
 }
 
-/** Folder names hidden from sidebar/search nav (still directly loadable by URL). */
-const HIDDEN_FOLDERS = new Set(["clade", "claude"]);
-
-function filterHiddenFolders<T extends { slug: string[] }>(notes: T[]): T[] {
-  return notes.filter(
-    (note) => !note.slug.some((segment) => HIDDEN_FOLDERS.has(segment.toLowerCase()))
-  );
-}
-
 function buildSidebarTree(
   notes: Array<{ slug: string[]; title: string }>,
   lexiconSlug: string
@@ -55,38 +46,19 @@ function buildSidebarTree(
   const root: SidebarItem[] = [];
   const folders = new Map<string, SidebarItem>();
 
-  const sorted = [...filterHiddenFolders(notes)].sort((a, b) =>
-    a.slug.join("/").localeCompare(b.slug.join("/"))
-  );
-
-  for (const note of sorted) {
-    const href = `/${lexiconSlug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`;
-    const item: SidebarItem = { label: note.title, href };
-
-    if (note.slug.length === 1) {
-      root.push(item);
-    } else {
-      const folderParts = note.slug.slice(0, -1);
-      const folderKey = folderParts.join("/");
-
-      let parent = folders.get(folderKey);
-      if (!parent) {
-        parent = {
-          label: folderParts.at(-1)!,
-          href: `/${lexiconSlug}/${folderParts.map((s) => encodeURIComponent(s)).join("/")}`,
-          children: [],
-        };
-        folders.set(folderKey, parent);
-        const grandparentKey = folderParts.slice(0, -1).join("/");
-        const grandparent = folders.get(grandparentKey);
-        if (grandparent) {
-          grandparent.children!.push(parent);
-        } else {
-          root.push(parent);
-        }
+  for (const note of notes) {
+    let siblings = root;
+    for (let depth = 0; depth < note.slug.length - 1; depth++) {
+      const path = note.slug.slice(0, depth + 1).join("/");
+      let folder = folders.get(path);
+      if (!folder) {
+        folder = { label: note.slug[depth], href: noteHref(lexiconSlug, path), children: [] };
+        siblings.push(folder);
+        folders.set(path, folder);
       }
-      parent.children!.push(item);
+      siblings = folder.children!;
     }
+    siblings.push({ label: note.title, href: noteHref(lexiconSlug, note.slug.join("/")) });
   }
 
   return root;
@@ -105,13 +77,11 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
     if (!valid) redirect(`/auth/${slug}`);
   }
 
-  const notes = await listNotes(lexiconS3Prefix(lexicon), lexicon.publishDefault);
+  const notes = (await listNotes(lexiconS3Prefix(lexicon), lexicon.publishDefault))
+    .filter(isReaderVisible).sort((a, b) => a.slug.join("/").localeCompare(b.slug.join("/")));
   const sidebarItems = buildSidebarTree(notes, slug);
-  const bookmarkItems = buildBookmarkTree(filterHiddenFolders(notes), slug);
-  const searchNotes = filterHiddenFolders(notes).map((n) => ({
-    title: n.title,
-    href: `/${slug}/${n.slug.map((s) => encodeURIComponent(s)).join("/")}`,
-  }));
+  const bookmarkItems = buildBookmarkTree(notes, slug);
+  const searchNotes = notes.map((note) => ({ title: note.title, slug: note.slug.join("/"), tags: note.tags }));
 
   return (
     <>
@@ -119,8 +89,10 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
         sidebar={
           <>
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 space-y-2">
-              <SearchBar />
               <PageSearchTrigger />
+              <Link href={`/${slug}/search`} prefetch={false} className="block rounded px-2 py-1 text-xs font-medium text-amber-800 hover:underline dark:text-amber-300">
+                Search note text <span aria-hidden="true">→</span>
+              </Link>
             </div>
             <SidebarWrapper lexicon={lexicon.title} items={sidebarItems} bookmarkItems={bookmarkItems} />
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 space-y-1 shrink-0">
@@ -159,7 +131,7 @@ export default async function LexiconLayout({ children, params }: LexiconLayoutP
           </>
         }
       >
-        <PageSearch notes={searchNotes} />
+        <PageSearch notes={searchNotes} lexicon={slug} />
         {children}
       </ResponsiveShell>
     </>
