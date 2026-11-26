@@ -15,11 +15,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE },
+      },
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: process.env.PENSIEVE_E2E_PRODUCTION ? 'npm run start -- -p 3001' : 'npm run dev',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
   },

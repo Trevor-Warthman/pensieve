@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLexiconBySlug, lexiconS3Prefix } from "@/lib/db";
-import { listNotes } from "@/lib/content";
+import { isReaderVisible, listNotes } from "@/lib/content";
+import { noteHref } from "@/lib/reader-search";
 
 interface LexiconPageProps {
   params: Promise<{ lexicon: string }>;
@@ -13,7 +14,7 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
   const lexicon = await getLexiconBySlug(slug);
   if (!lexicon) notFound();
 
-  const notes = await listNotes(lexiconS3Prefix(lexicon));
+  const notes = (await listNotes(lexiconS3Prefix(lexicon), lexicon.publishDefault)).filter(isReaderVisible);
   notes.sort((a, b) => a.slug.join("/").localeCompare(b.slug.join("/")));
 
   const pinnedNotes = notes
@@ -27,10 +28,10 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
   const unpinnedNotes = notes.filter((n) => !n.pin);
 
   return (
-    <div className="max-w-4xl mx-auto px-8 py-12">
+    <main className="max-w-4xl mx-auto px-4 py-6 sm:px-8 sm:py-10">
       <div className="mb-10">
         <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Lexicon</p>
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">{lexicon.title}</h1>
+        <h1 className="font-display text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">{lexicon.title}</h1>
       </div>
 
       {pinnedNotes.length > 0 && (
@@ -40,7 +41,8 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
             {pinnedNotes.map((note) => (
               <li key={note.s3Key}>
                 <Link
-                  href={`/${slug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`}
+                  href={noteHref(slug, note.slug.join("/"))}
+                  prefetch={false}
                   className="group flex flex-col gap-1 rounded-lg border border-gray-200 dark:border-gray-800 px-5 py-4 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                 >
                   <span className="text-gray-900 dark:text-white font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
@@ -64,7 +66,8 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
           {unpinnedNotes.map((note) => (
             <li key={note.s3Key}>
               <Link
-                href={`/${slug}/${note.slug.map((s) => encodeURIComponent(s)).join("/")}`}
+                href={noteHref(slug, note.slug.join("/"))}
+                prefetch={false}
                 className="group flex flex-col gap-1 rounded-lg border border-gray-200 dark:border-gray-800 px-5 py-4 hover:border-gray-400 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
               >
                 <span className="text-gray-900 dark:text-white font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
@@ -79,6 +82,6 @@ export default async function LexiconPage({ params }: LexiconPageProps) {
           ))}
         </ul>
       ) : null}
-    </div>
+    </main>
   );
 }

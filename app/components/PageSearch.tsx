@@ -1,161 +1,121 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createReaderSearch, noteHref, type SearchEntry } from "@/lib/reader-search";
 import { useCloseDrawer } from "./DrawerContext";
 
-interface SearchNote {
-  title: string;
-  href: string;
-}
-
-interface PageSearchProps {
-  notes: SearchNote[];
-}
-
-function filterNotes(notes: SearchNote[], query: string): SearchNote[] {
-  if (!query.trim()) return notes.slice(0, 10);
-  const q = query.toLowerCase();
-  return notes
-    .filter((n) => n.title.toLowerCase().includes(q) || n.href.toLowerCase().includes(q))
-    .slice(0, 10);
-}
-
-export default function PageSearch({ notes }: PageSearchProps) {
+export default function PageSearch({ notes, lexicon }: { notes: SearchEntry[]; lexicon: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [active, setActive] = useState(0);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const router = useRouter();
   const closeDrawer = useCloseDrawer();
-
-  const results = filterNotes(notes, query);
+  const search = useMemo(() => createReaderSearch(notes), [notes]);
+  const results = query.trim() ? search(query, 8) : notes.slice(0, 8);
+  const allResults = `/${lexicon}/search${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""}`;
 
   const close = useCallback(() => {
+    dialog.current?.close();
     setOpen(false);
     setQuery("");
-    setActiveIndex(0);
+    setActive(0);
+    opener.current?.focus();
   }, []);
 
-  const navigate = useCallback(
-    (href: string) => {
-      close();
-      closeDrawer();
-      router.push(href);
-    },
-    [close, closeDrawer, router]
-  );
+  function finish() {
+    close();
+    closeDrawer();
+  }
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
-        return;
-      }
-      if (
-        e.key === "/" &&
-        !open &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement)
-      ) {
-        e.preventDefault();
-        setOpen(true);
-      }
-    }
-    function onOpenEvent() {
+    function show() {
+      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setOpen(true);
     }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pensieve:opensearch", onOpenEvent);
+    function key(e: KeyboardEvent) {
+      const shortcut = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+      const slash = e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey &&
+        !(e.target instanceof HTMLElement && e.target.closest("input, textarea, select, [contenteditable]"));
+      if (shortcut || (slash && !open)) {
+        e.preventDefault();
+        if (open) close();
+        else show();
+      }
+    }
+    document.addEventListener("keydown", key);
+    document.addEventListener("pensieve:opensearch", show);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pensieve:opensearch", onOpenEvent);
+      document.removeEventListener("keydown", key);
+      document.removeEventListener("pensieve:opensearch", show);
     };
-  }, [open]);
+  }, [close, open]);
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 0);
+    if (open && dialog.current && !dialog.current.open) {
+      dialog.current.showModal();
+      dialog.current.querySelector("input")?.focus();
     }
   }, [open]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
-
-  function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") {
-      close();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && results[activeIndex]) {
-      navigate(results[activeIndex].href);
-    }
-  }
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-start justify-center px-3 pt-[max(4rem,env(safe-area-inset-top))] sm:pt-[20vh] bg-black/50"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
+    <dialog ref={dialog} aria-labelledby="quick-search-title"
+      onCancel={(event) => { event.preventDefault(); close(); }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          close();
+        }
       }}
-    >
-      <div className="w-full max-w-lg rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <svg
-            className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
-            />
-          </svg>
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Jump to page…"
-            className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
-          />
-          <kbd className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-0.5">
-            esc
-          </kbd>
+      onClick={(event) => { if (event.target === event.currentTarget) close(); }}
+      className="fixed inset-x-0 top-[max(1rem,env(safe-area-inset-top))] bottom-auto sm:top-[16vh] w-[calc(100%-1.5rem)] max-w-xl overflow-hidden rounded-xl border border-gray-200 bg-white p-0 text-gray-900 shadow-2xl backdrop:bg-gray-950/60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+      <div>
+        <div className="flex items-center justify-between px-4 pt-3">
+          <h2 id="quick-search-title" className="text-xs font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">Find a note</h2>
+          <button type="button" onClick={close} aria-label="Close search" className="rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">✕</button>
         </div>
-        {results.length > 0 ? (
-          <ul className="max-h-72 overflow-y-auto py-1">
-            {results.map((note, i) => (
-              <li key={note.href}>
-                <button
-                  className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                    i === activeIndex
-                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  }`}
-                  onMouseEnter={() => setActiveIndex(i)}
-                  onMouseDown={() => navigate(note.href)}
-                >
-                  {note.title}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No pages found.</p>
-        )}
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          const note = results[active];
+          finish();
+          router.push(note ? noteHref(lexicon, note.slug) : allResults);
+        }}>
+          <input type="search" aria-label="Jump to page" placeholder="Jump to page…" value={query}
+            onChange={(event) => { setQuery(event.target.value); setActive(0); }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const next = Math.max(0, Math.min(results.length - 1, active + (event.key === "ArrowDown" ? 1 : -1)));
+                setActive(next);
+                document.getElementById(`quick-search-${next}`)?.scrollIntoView({ block: "nearest" });
+              }
+            }}
+            className="mx-4 my-2 w-[calc(100%-2rem)] rounded-md border border-gray-300 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-amber-600 dark:border-gray-600" />
+        </form>
+        <ul aria-label="Suggested notes" className="max-h-[40dvh] overflow-y-auto px-2 py-1">
+          {results.map((note, index) => (
+            <li id={`quick-search-${index}`} key={note.slug}>
+              <Link href={noteHref(lexicon, note.slug)} onNavigate={finish} prefetch={false}
+                onMouseEnter={() => setActive(index)} onFocus={() => setActive(index)}
+                className={`block rounded-md px-3 py-2 ${index === active ? "bg-amber-50 dark:bg-amber-950/60" : ""}`}>
+                <span className="block text-sm font-medium">{note.title}</span>
+                <span className="block truncate font-mono text-xs text-gray-600 dark:text-gray-400">{note.slug}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {!results.length && <p role="status" className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">No matching titles, paths, or tags. Try searching note text.</p>}
+        <Link href={allResults} onNavigate={finish} prefetch={false}
+          className="block border-t border-gray-200 px-4 py-3 text-sm font-medium text-amber-800 hover:underline dark:border-gray-700 dark:text-amber-300">
+          Search note text {query.trim() && <>for “{query.trim()}”</>} <span aria-hidden="true">→</span>
+        </Link>
       </div>
-    </div>
+    </dialog>
   );
 }

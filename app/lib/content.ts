@@ -6,6 +6,7 @@ import {
 import { cache } from "react";
 import matter from "gray-matter";
 import { renderMarkdown, type Heading } from "./markdown";
+import type { SearchEntry } from "./reader-search";
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION ?? "us-east-1",
@@ -40,11 +41,9 @@ export interface RenderedNote extends NoteMetadata {
   backlinks: string[];
 }
 
-export interface SearchEntry {
-  title: string;
-  slug: string;
-  content: string;
-  tags: string[];
+/** Hidden from reader discovery, but still reachable directly when published. */
+export function isReaderVisible(note: { slug: string[] }): boolean {
+  return !note.slug.some((segment) => /^(clade|claude)$/i.test(segment));
 }
 
 export interface GraphNode {
@@ -77,10 +76,10 @@ function bookmarkFields(data: Record<string, unknown>): { bookmark: boolean; boo
   return { bookmark, bookmarkFolder: bookmark && typeof folder === "string" && folder.trim() ? folder.trim() : null };
 }
 
-async function fetchText(key: string): Promise<string> {
+const fetchText = cache(async (key: string): Promise<string> => {
   const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
   return await res.Body!.transformToString("utf-8");
-}
+});
 
 
 function keyToSlug(key: string, prefix: string): string[] {
@@ -133,7 +132,7 @@ export const listNotes = cache(async (
 
   // Legacy slow path: fetch every file to read frontmatter
   const folderDefaults = new Map<string, boolean>();
-  const rawNotes: Array<{ key: string; raw: string }> = [];
+  const noteKeys: string[] = [];
   let token: string | undefined;
 
   do {
@@ -153,12 +152,13 @@ export const listNotes = cache(async (
         continue;
       }
       if (!obj.Key.endsWith(".md")) continue;
-      rawNotes.push({ key: obj.Key, raw: await fetchText(obj.Key) });
+      noteKeys.push(obj.Key);
     }
 
     token = list.NextContinuationToken;
   } while (token);
 
+  const rawNotes = await mapWithConcurrency(noteKeys, 20, async (key) => ({ key, raw: await fetchText(key) }));
   const notes: NoteMetadata[] = [];
   for (const { key, raw } of rawNotes) {
     const { data } = matter(raw);
@@ -190,18 +190,10 @@ export const listNotes = cache(async (
   return notes;
 });
 
-/** Fetch the asset map (filename → relative path) from manifest. */
-export const getAssetMap = cache(async (
-  s3Prefix: string
-): Promise<Record<string, string>> => {
-  const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
-  const manifest = await fetchManifest(prefix);
-  return manifest?.assets ?? {};
-});
-
 /** Build backlinks index. Uses manifest if available (1 S3 request). */
-export const buildBacklinksIndex = cache(async (
-  s3Prefix: string
+const buildBacklinksIndex = cache(async (
+  s3Prefix: string,
+  publishDefault: boolean,
 ): Promise<Map<string, string[]>> => {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   const manifest = await fetchManifest(prefix);
@@ -217,27 +209,15 @@ export const buildBacklinksIndex = cache(async (
   // Legacy slow path: fetch every file to scan wikilinks
   const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
   const index = new Map<string, string[]>();
-  let token: string | undefined;
-
-  do {
-    const list = await s3.send(
-      new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: token })
-    );
-    for (const obj of list.Contents ?? []) {
-      if (!obj.Key?.endsWith(".md")) continue;
-      const raw = await fetchText(obj.Key);
-      const { content } = matter(raw);
-      const sourceSlug = keyToSlug(obj.Key, prefix).join("/");
-      wikilinkRegex.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = wikilinkRegex.exec(content)) !== null) {
-        const target = match[1].trim().toLowerCase();
-        const existing = index.get(target) ?? [];
-        if (!existing.includes(sourceSlug)) { existing.push(sourceSlug); index.set(target, existing); }
-      }
+  for (const note of await listNotes(s3Prefix, publishDefault)) {
+    const { content } = matter(await fetchText(note.s3Key));
+    const sourceSlug = note.slug.join("/");
+    for (const match of content.matchAll(wikilinkRegex)) {
+      const target = match[1].trim().toLowerCase();
+      const existing = index.get(target) ?? [];
+      if (!existing.includes(sourceSlug)) { existing.push(sourceSlug); index.set(target, existing); }
     }
-    token = list.NextContinuationToken;
-  } while (token);
+  }
 
   return index;
 });
@@ -246,75 +226,68 @@ export const buildBacklinksIndex = cache(async (
 export async function getNote(
   s3Prefix: string,
   slugPath: string[],
-  backlinksIndex?: Map<string, string[]>,
-  assets?: Record<string, string>,
-  lexiconSlug?: string,
-  revealSecrets = false,
+  publishDefault: boolean,
+  lexiconSlug: string,
+  readerId: Promise<string | null>,
+  ownerId: string,
 ): Promise<RenderedNote | null> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
   let key = `${prefix}${slugPath.join("/")}.md`;
-
-  let raw: string;
-  try {
-    raw = await fetchText(key);
-  } catch {
-    // Fallback: the filename may contain URL-unsafe chars (e.g. '?') that were
-    // stripped or mangled by the browser before reaching the server.  Try to
-    // find a manifest entry whose slug, after removing those chars, matches
-    // the requested path.
-    const manifest = await fetchManifest(prefix);
-    if (!manifest) return null;
-
-    const requestedLower = slugPath.join("/").toLowerCase();
-    const safeSlug = (s: string) => s.toLowerCase().replace(/[?#]/g, "");
-    const matched = manifest.notes.find(
-      (n) => safeSlug(n.slug) === safeSlug(requestedLower) || safeSlug(n.slug) === requestedLower
-    );
-    if (!matched) return null;
-
-    key = `${prefix}${matched.slug}.md`;
-    try {
-      raw = await fetchText(key);
-    } catch {
-      return null;
-    }
+  const [direct, manifest] = await Promise.all([
+    fetchText(key).catch((error: unknown) => {
+      if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }),
+    fetchManifest(prefix),
+  ]);
+  let raw = direct;
+  let notes: NoteMetadata[];
+  if (raw === null) {
+    notes = await listNotes(s3Prefix, publishDefault);
+    // Next can pass encoded segments during client transitions, even when a
+    // direct request supplies decoded segments. Try the canonical note path.
+    const decoded = slugPath.map((segment) => {
+      try { return decodeURIComponent(segment); } catch { return segment; }
+    }).join("/");
+    const safe = (slug: string) => slug.toLowerCase().replace(/[?#]/g, "");
+    const matched = notes.find((note) => note.slug.join("/") === decoded) ??
+      notes.find((note) => safe(note.slug.join("/")) === safe(decoded));
+    if (!matched || matched.s3Key === key) return null;
+    slugPath = matched.slug;
+    key = matched.s3Key;
+    try { raw = await fetchText(key); } catch { return null; }
+  } else {
+    notes = await listNotes(s3Prefix, publishDefault);
+    if (!notes.some((note) => note.s3Key === key)) return null;
   }
 
   const { data, content } = matter(raw);
   if (data.publish === false) return null;
 
-  // Build a slug map for resolving wikilinks to absolute paths.
-  // Manifest is already cached, so this costs no extra S3 requests.
-  let noteSlugMap: Map<string, string> | undefined;
-  if (lexiconSlug) {
-    const manifest = await fetchManifest(prefix);
-    if (manifest) {
-      noteSlugMap = new Map();
-      for (const note of manifest.notes) {
-        const lowerSlug = note.slug.toLowerCase();
-        const basename = lowerSlug.split("/").pop()!;
-        // Index by full lowercase slug and by bare basename (for shortest-path lookup).
-        // Full path takes priority; first writer wins for basename collisions.
-        noteSlugMap.set(lowerSlug, note.slug);
-        if (!noteSlugMap.has(basename)) noteSlugMap.set(basename, note.slug);
-      }
-    }
+  const noteSlugMap = new Map<string, string>();
+  for (const note of notes) {
+    const slug = note.slug.join("/");
+    const lowerSlug = slug.toLowerCase();
+    const basename = lowerSlug.split("/").pop()!;
+    noteSlugMap.set(lowerSlug, slug);
+    if (!noteSlugMap.has(basename)) noteSlugMap.set(basename, slug);
   }
 
+  const [backlinksIndex, userId] = await Promise.all([buildBacklinksIndex(s3Prefix, publishDefault), readerId]);
   const { html, headings } = await renderMarkdown(
     content,
     {
       cloudfrontUrl: CLOUDFRONT_URL,
       s3Prefix,
-      assets,
+      assets: manifest?.assets,
       lexiconSlug,
       noteSlugMap,
     },
-    { revealSecrets }
+    { revealSecrets: userId === ownerId }
   );
 
   const slugStr = slugPath.join("/").toLowerCase();
-  const backlinks = backlinksIndex?.get(slugStr) ?? [];
+  const backlinks = backlinksIndex.get(slugStr) ?? [];
 
   return {
     slug: slugPath,
@@ -366,7 +339,7 @@ export async function buildSearchIndex(
   publishDefault = true
 ): Promise<SearchEntry[]> {
   const prefix = s3Prefix.endsWith("/") ? s3Prefix : `${s3Prefix}/`;
-  const notes = await listNotes(s3Prefix, publishDefault);
+  const notes = (await listNotes(s3Prefix, publishDefault)).filter(isReaderVisible);
 
   // Manifest (when present) already carries a stripped content excerpt per
   // note, computed once at sync time — avoids an S3 GET per note on every
@@ -376,13 +349,13 @@ export async function buildSearchIndex(
   const manifestContent = new Map<string, string>();
   if (manifest) {
     for (const n of manifest.notes) {
-      if (n.content !== undefined) manifestContent.set(n.slug.toLowerCase(), n.content);
+      if (n.content !== undefined) manifestContent.set(n.slug, n.content.replace(/%%[\s\S]*?(?:%%|$)/g, " ").trim());
     }
   }
 
   return mapWithConcurrency(notes, 20, async (note) => {
     const slugStr = note.slug.join("/");
-    const cached = manifestContent.get(slugStr.toLowerCase());
+    const cached = manifestContent.get(slugStr);
     if (cached !== undefined) {
       return { title: note.title, slug: slugStr, content: cached, tags: note.tags };
     }
@@ -391,7 +364,7 @@ export async function buildSearchIndex(
     try {
       const raw = await fetchText(note.s3Key);
       const { content } = matter(raw);
-      rawContent = stripMarkdown(content).slice(0, 500);
+      rawContent = stripMarkdown(content.replace(/%%[\s\S]*?(?:%%|$)/g, " ")).slice(0, 500);
     } catch { /* fall back to empty */ }
 
     return { title: note.title, slug: slugStr, content: rawContent, tags: note.tags };

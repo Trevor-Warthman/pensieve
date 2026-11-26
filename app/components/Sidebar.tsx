@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useCloseDrawer } from "./DrawerContext";
 
 export interface SidebarItem {
@@ -107,7 +107,7 @@ export default function Sidebar({ lexicon, items: allItems, bookmarkItems = [], 
           <ul className="space-y-0.5 px-2">
             {items.map((item) => (
               <SidebarNavItem
-                key={item.href}
+                key={`${item.children ? "folder" : "note"}:${item.href}`}
                 item={item}
                 currentPath={currentPath}
                 depth={0}
@@ -120,6 +120,11 @@ export default function Sidebar({ lexicon, items: allItems, bookmarkItems = [], 
       </div>
     </nav>
   );
+}
+
+function PendingNote() {
+  const { pending } = useLinkStatus();
+  return pending ? <span role="status" aria-label="Opening note" className="ml-auto pl-2 text-amber-700 dark:text-amber-300">…</span> : null;
 }
 
 interface SidebarNavItemProps {
@@ -160,7 +165,8 @@ function SidebarNavItem({ item, currentPath, depth, collapsed, onToggleFolder }:
         <Link
           href={item.href}
           prefetch={false}
-          onClick={closeDrawer}
+          onNavigate={closeDrawer}
+          aria-current={isActive ? "page" : undefined}
           className={`
             flex items-center px-3 py-1.5 rounded text-sm border-l-2 -ml-px transition-colors
             ${isActive
@@ -170,14 +176,15 @@ function SidebarNavItem({ item, currentPath, depth, collapsed, onToggleFolder }:
           `}
           style={{ paddingLeft: `${0.75 + depth * 1 + 1.125}rem` }}
         >
-          {item.label}
+          <span className="min-w-0 break-words">{item.label}</span>
+          <PendingNote />
         </Link>
       )}
       {isFolder && expanded && (
         <ul className="mt-0.5 space-y-0.5">
           {item.children!.map((child) => (
             <SidebarNavItem
-              key={child.href}
+              key={`${child.children ? "folder" : "note"}:${child.href}`}
               item={child}
               currentPath={currentPath}
               depth={depth + 1}
