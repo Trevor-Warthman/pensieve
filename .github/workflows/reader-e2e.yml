@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   reader:
-    runs-on: ubuntu-latest
+    # Playwright 1.58 has no Ubuntu 26.04 Chromium build.
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
       DYNAMODB_ENDPOINT: http://127.0.0.1:8000
